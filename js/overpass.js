@@ -238,26 +238,26 @@ out center;`;
    * Finds the N nearest public transport stops using Exponential Radius Expansion:
    * Starts with a tight radius (e.g. 1,000m) and exponentially doubles the radius
    * Finds nearest public transport stops using Adaptive Exponential Radius Expansion:
-   * - Starts with a tight radius (e.g. 1,000m) and doubles the radius (1km -> 2km -> 4km -> 8km -> 10km).
-   * - Capped strictly at maxRadiusM (10,000m / 10km max).
+   * - Starts with a tight radius (e.g. 1,000m) and doubles the radius (1km -> 2km -> 4km -> 8km -> 16km -> 20km).
+   * - Capped strictly at maxRadiusM (20,000m / 20km max).
    * - If shouldContinueExpanding callback is provided and indicates stops found so far still have great glide ratios,
    *   it keeps expanding up to maxRadiusM (max 5 queries) to discover even better transit connections.
    *
    * @param {number} lat Pilot latitude
    * @param {number} lon Pilot longitude
    * @param {number} count Number of nearest stops to return (N, default: 15)
-   * @param {number} maxRadiusM Maximum upper search radius in meters (strictly capped at 10,000m / 10km)
+   * @param {number} maxRadiusM Maximum upper search radius in meters (strictly capped at 20,000m / 20km)
    * @param {Function} shouldContinueExpanding Optional async callback (currentStops, currentRadiusM) => boolean
    * @returns {Promise<Array>} Array of parsed stop objects sorted by distance
    */
-  async findNearestStops(lat, lon, count = 15, maxRadiusM = 10000, shouldContinueExpanding = null) {
+  async findNearestStops(lat, lon, count = 15, maxRadiusM = 20000, shouldContinueExpanding = null) {
     const MAX_QUERIES = 5;
     const baseRadiusM = 1000; // Start at 1,000 meters
-    const HARD_MAX_RADIUS_M = Math.min(maxRadiusM || 10000, 10000); // Strict 10km ceiling
+    const HARD_MAX_RADIUS_M = Math.min(maxRadiusM || 20000, 20000); // Strict 20km ceiling
     let stops = [];
 
     for (let attempt = 1; attempt <= MAX_QUERIES; attempt++) {
-      // Exponential increase: 1km -> 2km -> 4km -> 8km -> 10km
+      // Exponential increase: 1km -> 2km -> 4km -> 8km -> 16km -> 20km
       let currentRadiusM = Math.round(baseRadiusM * Math.pow(2, attempt - 1));
       if (currentRadiusM > HARD_MAX_RADIUS_M || attempt === MAX_QUERIES) {
         currentRadiusM = HARD_MAX_RADIUS_M;
@@ -267,7 +267,7 @@ out center;`;
       stops = await this._queryAndParseStops(lat, lon, currentRadiusM);
       console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Found ${stops.length} unique stops`);
 
-      // If already at or beyond the 10km hard ceiling, or on last attempt, return results
+      // If already at or beyond the 20km hard ceiling, or on last attempt, return results
       if (currentRadiusM >= HARD_MAX_RADIUS_M || attempt === MAX_QUERIES) {
         break;
       }

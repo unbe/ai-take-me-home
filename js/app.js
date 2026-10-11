@@ -284,12 +284,12 @@ async function calculateRoutes() {
   try {
     // 2. Discover nearest stops via Overpass API with Adaptive Glide Ratio Radius Expansion:
     // If the stops found within the current radius still have great glide ratios (e.g. <= maxGlideRatio),
-    // keep expanding the search radius up to a strict 10km maximum to discover faster transit options.
-    const maxSearchRadiusM = Math.min(settings.searchRadiusKm * 1000, 10000);
-    setLoading(true, `Querying stops (expanding up to 10km if glide ratio is great)...`);
+    // keep expanding the search radius up to a strict 20km maximum to discover faster transit options.
+    const maxSearchRadiusM = Math.min(settings.searchRadiusKm * 1000, 20000);
+    setLoading(true, `Querying stops (expanding up to 20km if glide ratio is great)...`);
 
     const shouldContinueExpanding = async (currentStops, currentRadiusM) => {
-      if (currentRadiusM >= 10000) return false;
+      if (currentRadiusM >= 20000) return false;
 
       // Check elevation and glide ratio for candidate stops found so far
       await Elevation.populateStopElevations(currentStops);
@@ -310,10 +310,10 @@ async function calculateRoutes() {
         }
       }
 
-      // If at least 60% of stops or at least 5 stops have great glide ratios, keep expanding to 10km!
+      // If at least 5 stops or at least 50% have great glide ratios, keep expanding up to 20km!
       const isGlideStillGreat = greatGlideCount >= 5 || (greatGlideCount / currentStops.length) >= 0.5;
-      if (isGlideStillGreat && currentRadiusM < 10000) {
-        setLoading(true, `Glide ratio is great (${greatGlideCount} stops <= ${settings.maxGlideRatio}:1)! Expanding radius beyond ${Math.round(currentRadiusM / 1000)}km (up to 10km max)...`);
+      if (isGlideStillGreat && currentRadiusM < 20000) {
+        setLoading(true, `Glide ratio is great (${greatGlideCount} stops <= ${settings.maxGlideRatio}:1)! Expanding radius beyond ${Math.round(currentRadiusM / 1000)}km (up to 20km max)...`);
         return true;
       }
       return false;
