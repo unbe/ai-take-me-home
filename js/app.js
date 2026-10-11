@@ -331,10 +331,8 @@ async function calculateRoutes() {
     setLoading(true, `Fetching terrain elevations for ${stops.length} candidate stops...`);
     await Elevation.populateStopElevations(stops);
 
-    // 4. Calculate glide ratio, reach time, and journey start time
+    // 4. Calculate glide ratios & reach times instantaneously (local vector math)
     const now = new Date();
-    setLoading(true, `Calculating glide ratios & transit routes to destination...`);
-
     for (const stop of stops) {
       // Straight-line travel time: distKm / 30km/h + 30 min buffer
       stop.reachTimeMinutes = Geo.calculateReachTimeMinutes(
@@ -357,21 +355,57 @@ async function calculateRoutes() {
 
       // Journey start time = now + reach time
       stop.targetDepartureDate = new Date(now.getTime() + stop.reachTimeMinutes * 60000);
+    }
 
-      // Query public transit via Transitous / MOTIS v2 API
-      stop.transit = await Transit.planJourney(
-        stop,
-        destination,
-        stop.targetDepartureDate
-      );
+    // Sort candidate stops so reachable & marginal ones are queried FIRST
+    // This ensures high-priority viable stops get accurate timetables immediately
+    stops.sort((a, b) => {
+      const priority = { reachable: 0, marginal: 1, unreachable: 2 };
+      const pDiff = (priority[a.feasibility.status] || 2) - (priority[b.feasibility.status] || 2);
+      if (pDiff !== 0) return pDiff;
+      return a.distM - b.distM;
+    });
+
+    // 5. Query public transit strictly sequentially (1 request at a time)
+    // Only query live timetable API for feasible/marginal stops (capped to top candidates)
+    // Unreachable outliers get instant distance-based fallback routing, saving network roundtrips!
+    const MAX_LIVE_TRANSIT_QUERIES = 10;
+    let liveQueriesCount = 0;
+
+    for (let i = 0; i < stops.length; i++) {
+      const stop = stops[i];
+      const isViableForFlight = stop.feasibility.status === 'reachable' || stop.feasibility.status === 'marginal';
+
+      if (isViableForFlight && liveQueriesCount < MAX_LIVE_TRANSIT_QUERIES) {
+        liveQueriesCount++;
+        setLoading(true, `Querying timetable ${liveQueriesCount}/${Math.min(stops.length, MAX_LIVE_TRANSIT_QUERIES)}: ${stop.name}...`);
+        stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
+      } else {
+        // Instant estimation without waiting on API roundtrip
+        stop.transit = Transit.generateFallbackRoute(
+          stop,
+          destination,
+          stop.targetDepartureDate,
+          isViableForFlight ? 'Estimated connection' : 'Unreachable by glide'
+        );
+      }
 
       // Total journey time from now to final destination arrival
       stop.totalTripMinutes = Math.round(
         stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
       );
+
+      // Progressive live streaming: show first result as soon as ready!
+      if (i === 0) {
+        const initialSorted = [...stops.slice(0, 1)];
+        MapManager.renderStops(initialSorted, pilot, destination, (clickedStop) => {
+          highlightStopCard(clickedStop);
+        });
+        renderResults(initialSorted);
+      }
     }
 
-    // 5. Rank stops by arrival time / total trip duration
+    // 6. Final sort by arrival time / total trip duration
     stops.sort((a, b) => a.totalTripMinutes - b.totalTripMinutes);
     State.stops = stops;
 

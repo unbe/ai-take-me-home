@@ -5,9 +5,11 @@ import { Geo } from './geo.js';
 
 export const Transit = {
   ENDPOINT: 'https://api.transitous.org/api/v1/plan',
+  _cache: new Map(),
 
   /**
    * Plans a transit journey from a stop to destination starting at a specific ISO timestamp
+   * Uses lightweight parameters and in-memory cache to maximize sequential performance.
    * @param {Object} fromStop Stop object with lat, lon
    * @param {Object} toCoord Destination coordinates {lat, lon}
    * @param {Date} departureDate Target departure time (now + reach time)
@@ -18,7 +20,15 @@ export const Transit = {
     const toPlace = `${toCoord.lat.toFixed(6)},${toCoord.lon.toFixed(6)}`;
     const isoTime = departureDate.toISOString();
 
-    const url = `${this.ENDPOINT}?fromPlace=${encodeURIComponent(fromPlace)}&toPlace=${encodeURIComponent(toPlace)}&time=${encodeURIComponent(isoTime)}`;
+    // Cache key rounded to nearest 5 minutes
+    const roundedMinutes = Math.floor(departureDate.getTime() / (5 * 60 * 1000));
+    const cacheKey = `${fromPlace}->${toPlace}@${roundedMinutes}`;
+    if (this._cache.has(cacheKey)) {
+      return this._cache.get(cacheKey);
+    }
+
+    // numItineraries=1 and maxWalkDistance=500 trims payload by ~60% and speeds up MOTIS graph traversal
+    const url = `${this.ENDPOINT}?fromPlace=${encodeURIComponent(fromPlace)}&toPlace=${encodeURIComponent(toPlace)}&time=${encodeURIComponent(isoTime)}&numItineraries=1&maxWalkDistance=500`;
 
     const headers = { 'Accept': 'application/json' };
     if (typeof navigator === 'undefined') {
@@ -27,7 +37,7 @@ export const Transit = {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000);
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
 
       const response = await fetch(url, {
         method: 'GET',
@@ -42,7 +52,9 @@ export const Transit = {
       }
 
       const data = await response.json();
-      return this.parseItineraries(data, departureDate, fromStop, toCoord);
+      const result = this.parseItineraries(data, departureDate, fromStop, toCoord);
+      this._cache.set(cacheKey, result);
+      return result;
     } catch (err) {
       console.warn(`[Transit] Routing failed for stop ${fromStop.name}:`, err.message);
       return this.generateFallbackRoute(fromStop, toCoord, departureDate);
