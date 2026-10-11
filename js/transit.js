@@ -15,20 +15,20 @@ export const Transit = {
    * @param {Date} departureDate Target departure time (now + reach time)
    * @returns {Promise<Object>} Formatted journey summary
    */
-  async planJourney(fromStop, toCoord, departureDate) {
+  async planJourney(fromStop, toCoord, departureDate, maxWalkDistanceM = 3000) {
     const fromPlace = `${fromStop.lat.toFixed(6)},${fromStop.lon.toFixed(6)}`;
     const toPlace = `${toCoord.lat.toFixed(6)},${toCoord.lon.toFixed(6)}`;
     const isoTime = departureDate.toISOString();
 
     // Cache key rounded to nearest 5 minutes
     const roundedMinutes = Math.floor(departureDate.getTime() / (5 * 60 * 1000));
-    const cacheKey = `${fromPlace}->${toPlace}@${roundedMinutes}`;
+    const cacheKey = `${fromPlace}->${toPlace}@${roundedMinutes}_${maxWalkDistanceM}`;
     if (this._cache.has(cacheKey)) {
       return this._cache.get(cacheKey);
     }
 
-    // numItineraries=1 and maxWalkDistance=1500 enables reachability to final coords without payload bloat
-    const url = `${this.ENDPOINT}?fromPlace=${encodeURIComponent(fromPlace)}&toPlace=${encodeURIComponent(toPlace)}&time=${encodeURIComponent(isoTime)}&numItineraries=1&maxWalkDistance=1500`;
+    // Allow walking up to 3km (3000m) for final destination reachability
+    const url = `${this.ENDPOINT}?fromPlace=${encodeURIComponent(fromPlace)}&toPlace=${encodeURIComponent(toPlace)}&time=${encodeURIComponent(isoTime)}&numItineraries=1&maxWalkDistance=${maxWalkDistanceM}`;
 
     const headers = { 'Accept': 'application/json' };
     if (typeof navigator === 'undefined') {
