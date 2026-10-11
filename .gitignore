@@ -1,0 +1,14 @@
+# Certificates
+cert/*.pem
+cert/*.key
+cert/*.crt
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node / Scratch
+node_modules/
+*.log

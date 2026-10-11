@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Take Me Home - Paragliding & Transit Navigator</title>
+  <meta name="description" content="Find nearest public transport stops, calculate glide ratio L/D and transit times to your destination." />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- MapLibre GL CSS (for Mapterhorn terrain rendering) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="css/styles.css?v=3.0" />
+</head>
+<body>
+  <div class="app-container">
+    <!-- LEAFLET MAP VIEWPORT -->
+    <div id="map"></div>
+
+    <!-- FLOATING TOP NAVIGATION -->
+    <header class="top-nav">
+      <div class="top-bar-content">
+        <div class="app-title">
+          <span>🪂 Take Me Home</span>
+          <span class="app-badge">Glider Nav</span>
+        </div>
+        <div class="nav-actions">
+          <button id="btn-gps" class="btn-icon" title="Find my current location" aria-label="Locate me">🛰️</button>
+          <button id="btn-open-inputs" class="btn-icon" title="Coordinates & Settings" aria-label="Open settings">⚙️</button>
+        </div>
+      </div>
+
+      <!-- COLLAPSIBLE SUMMARY CHIP (Glanceable on mobile) -->
+      <div id="coord-chip" class="coord-chip" title="Tap to change coordinates">
+        <div class="coord-chip-details">
+          <span>📍</span>
+          <span id="chip-pilot-text">1500m</span>
+          <span>➔</span>
+          <span>🏁</span>
+          <span id="chip-dest-text">Bern</span>
+        </div>
+        <button class="chip-edit-btn">Change</button>
+      </div>
+    </header>
+
+    <!-- FLOATING ACTION BUTTONS -->
+    <div class="fab-container">
+      <button id="fab-recalc" class="fab-btn primary" title="Recalculate stops" aria-label="Recalculate">⚡</button>
+    </div>
+
+    <!-- INPUT & SETTINGS PANEL (Collapsible) -->
+    <section id="input-panel" class="input-panel" aria-label="Flight and destination settings">
+      <div class="panel-header">
+        <h2 class="panel-title">Flight & Destination</h2>
+        <button id="btn-close-inputs" class="close-btn" aria-label="Close panel">&times;</button>
+      </div>
+
+      <!-- PRESETS -->
+      <div class="presets-group">
+        <span class="presets-label">Quick Presets</span>
+        <div class="presets-chips">
+          <button type="button" class="preset-chip" data-preset="steinhausen">Steinhausen (ZG) ➔ Zurich</button>
+          <button type="button" class="preset-chip" data-preset="interlaken">Interlaken (CH) ➔ Bern</button>
+          <button type="button" class="preset-chip" data-preset="annecy">Annecy (FR) ➔ Geneva</button>
+          <button type="button" class="preset-chip" data-preset="bassano">Bassano (IT) ➔ Venice</button>
+          <button type="button" class="preset-chip" data-preset="verbier">Verbier (CH) ➔ Lausanne</button>
+        </div>
+      </div>
+
+      <!-- PILOT COORDINATES -->
+      <div class="form-section">
+        <div class="form-label">
+          <span>My Position (Pilot)</span>
+          <button type="button" id="btn-pilot-gps" class="chip-edit-btn">Use GPS</button>
+        </div>
+        <div class="input-row">
+          <div class="field-group">
+            <span class="field-sublabel">Latitude</span>
+            <input type="number" id="input-pilot-lat" step="0.0001" value="46.6863" />
+          </div>
+          <div class="field-group">
+            <span class="field-sublabel">Longitude</span>
+            <input type="number" id="input-pilot-lon" step="0.0001" value="7.8632" />
+          </div>
+          <div class="field-group">
+            <span class="field-sublabel">Altitude (m MSL)</span>
+            <input type="number" id="input-pilot-alt" step="10" value="1600" />
+          </div>
+        </div>
+      </div>
+
+      <!-- DESTINATION COORDINATES -->
+      <div class="form-section">
+        <div class="form-label">
+          <span>Destination (Home / Safe Haven)</span>
+        </div>
+        <div class="input-row-2">
+          <div class="field-group">
+            <span class="field-sublabel">Latitude</span>
+            <input type="number" id="input-dest-lat" step="0.0001" value="46.9480" />
+          </div>
+          <div class="field-group">
+            <span class="field-sublabel">Longitude</span>
+            <input type="number" id="input-dest-lon" step="0.0001" value="7.4474" />
+          </div>
+        </div>
+      </div>
+
+      <!-- SEARCH & FLIGHT PARAMETERS -->
+      <div class="form-section">
+        <div class="form-label">
+          <span>Search & Glide Parameters</span>
+        </div>
+        <div class="input-row">
+          <div class="field-group">
+            <span class="field-sublabel">Stops Count (N)</span>
+            <input type="number" id="input-stops-count" min="1" max="25" value="15" />
+          </div>
+          <div class="field-group">
+            <span class="field-sublabel">Radius (km)</span>
+            <input type="number" id="input-search-radius" min="2" max="25" value="8" />
+          </div>
+          <div class="field-group">
+            <span class="field-sublabel">Speed (km/h)</span>
+            <input type="number" id="input-speed" min="10" max="80" value="30" />
+          </div>
+        </div>
+        <div class="input-row-2" style="margin-top: 4px;">
+          <div class="field-group">
+            <span class="field-sublabel">Pack / Buffer (min)</span>
+            <input type="number" id="input-buffer" min="0" max="120" value="30" />
+          </div>
+          <div class="field-group">
+            <span class="field-sublabel">Glider Max L/D</span>
+            <input type="number" id="input-glide-threshold" step="0.5" value="8.0" />
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBMIT BUTTON -->
+      <button id="btn-calculate" class="btn-primary">
+        <span>⚡ Calculate Routes & Glides</span>
+      </button>
+    </section>
+
+    <!-- BOTTOM SHEET / DRAWER (Mobile First) -->
+    <aside id="bottom-sheet" class="bottom-sheet" aria-label="Results drawer">
+      <div id="sheet-handle-bar" class="sheet-handle-bar">
+        <div class="sheet-handle"></div>
+      </div>
+
+      <div class="sheet-header-summary">
+        <span id="results-count-title" class="sheet-summary-title">Public Transport Options</span>
+        <button id="btn-toggle-sheet" class="sheet-toggle-btn">Minimize</button>
+      </div>
+
+      <!-- HERO / QUICK GLANCE CARD (#1 BEST OPTION) -->
+      <div id="hero-card" class="hero-card" style="display: none;">
+        <div class="hero-header">
+          <span class="hero-rank-tag">🏆 Best Route</span>
+          <div id="hero-badge" class="status-pill badge-reachable">🟢 Reachable (6.2:1)</div>
+        </div>
+        <div id="hero-name" class="hero-name">🚆 Interlaken Ost</div>
+        <div class="hero-metrics-grid">
+          <div class="hero-metric-box">
+            <span class="hero-metric-label">Glide Ratio</span>
+            <span id="hero-glide-val" class="hero-metric-val">6.2:1</span>
+            <span id="hero-glide-drop" class="hero-metric-sub">-1035m drop</span>
+          </div>
+          <div class="hero-metric-box">
+            <span class="hero-metric-label">To Stop</span>
+            <span id="hero-reach-val" class="hero-metric-val">41m</span>
+            <span id="hero-dist-val" class="hero-metric-sub">5.4 km</span>
+          </div>
+          <div class="hero-metric-box">
+            <span class="hero-metric-label">Arrival</span>
+            <span id="hero-arr-val" class="hero-metric-val">17:15</span>
+            <span id="hero-total-val" class="hero-metric-sub">1h 14m total</span>
+          </div>
+        </div>
+        <div class="card-links-row">
+          <a id="hero-link-gmaps" class="card-link-btn gmaps" href="#" target="_blank" rel="noopener">
+            <span>🗺️ Google Maps</span>
+          </a>
+          <a id="hero-link-sbb-app" class="card-link-btn sbb-app" href="#">
+            <span>📱 SBB App</span>
+          </a>
+          <a id="hero-link-sbb" class="card-link-btn sbb" href="#" target="_blank" rel="noopener">
+            <span>🚆 SBB Web</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- SCROLLABLE STOPS LIST -->
+      <div id="stops-list" class="stops-list">
+        <p id="stops-empty-msg" style="text-align: center; color: var(--text-secondary); padding: 20px 0;">
+          Tap <strong>⚡ Calculate</strong> or select a preset above to discover nearby stops.
+        </p>
+      </div>
+    </aside>
+
+    <!-- LOADING OVERLAY -->
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="spinner"></div>
+      <div id="loading-text" class="loading-text">Finding nearest transport stops...</div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- MapLibre GL JS & Leaflet Plugin for Mapterhorn Hillshade Rendering -->
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
+
+  <!-- App Entry Point (ES Module) -->
+  <script type="module" src="js/app.js?v=3.0"></script>
+</body>
+</html>
