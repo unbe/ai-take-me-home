@@ -123,6 +123,37 @@ out center;`;
       const tags = el.tags || {};
       if (tags.railway === 'buffer_stop') continue;
 
+      // Exclude chairlift, ski gondola, and cable transport stations
+      // (aerialway=*, station=funicular/cable_car, or lift transport nodes)
+      if (
+        tags.aerialway ||
+        tags.station === 'funicular' ||
+        tags.station === 'cable_car' ||
+        tags.funicular === 'station' ||
+        tags.cable_car ||
+        tags.chair_lift ||
+        tags.gondola ||
+        tags.drag_lift ||
+        tags.t_bar
+      ) {
+        continue;
+      }
+
+      // Check name for explicit ski/gondola/cableway terms
+      const rawNameCheck = (tags.name || tags.uic_name || '').toLowerCase();
+      if (
+        rawNameCheck.includes('sesselbahn') ||
+        rawNameCheck.includes('chairlift') ||
+        rawNameCheck.includes('gondelbahn') ||
+        rawNameCheck.includes('skilift') ||
+        rawNameCheck.includes('télésiège') ||
+        rawNameCheck.includes('télécabine') ||
+        rawNameCheck.includes('funivia') ||
+        rawNameCheck.includes('seggiovia')
+      ) {
+        continue;
+      }
+
       // Ensure stop has a recognizable name
       // In Switzerland and Europe, tags.uic_name contains the official detailed network name (e.g. "Interlaken, Sonnenhof")
       // whereas tags.name is often just local "Sonnenhof".
