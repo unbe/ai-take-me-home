@@ -55,15 +55,16 @@ function runTests() {
     throw new Error('Duration formatting failed');
   }
   // Test 6: SBB URL generation
-  const webUrl = Geo.getSbbWebUrl('Mörel', 'Bitsch');
-  const mobileUrl = Geo.getSbbMobileUrl('Mörel', 'Bitsch');
+  const webUrl = Geo.getSbbWebUrl('Oberiberg, Wandli', 'Bern');
+  const mobileUrl = Geo.getSbbMobileUrl('Oberiberg, Wandli', 'Bern');
   console.log('Test 6a: SBB Web URL:', webUrl);
   console.log('Test 6b: SBB Mobile URL:', mobileUrl);
 
-  if (webUrl !== 'https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=M%C3%B6rel&nach=Bitsch&suche=true') {
+  // Commas must be stripped so SBB parses as transit stop rather than street address
+  if (webUrl !== 'https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=Oberiberg%20Wandli&nach=Bern&suche=true') {
     throw new Error(`SBB Web URL mismatch: ${webUrl}`);
   }
-  if (mobileUrl !== 'sbbmobile://timetable?from=M%C3%B6rel&to=Bitsch') {
+  if (mobileUrl !== 'sbbmobile://timetable?from=Oberiberg%20Wandli&to=Bern') {
     throw new Error(`SBB Mobile URL mismatch: ${mobileUrl}`);
   }
   console.log('Test 6: SBB link generation: PASS');

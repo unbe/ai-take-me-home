@@ -181,19 +181,45 @@ export const Geo = {
   },
 
   /**
-   * Generate SBB Web Timetable URL
-   * Format: https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=...&nach=...&suche=true
+   * Helper to clean station and town names for SBB URL search queries.
+   * On SBB, commas (e.g. "Oberiberg, Wandli") often confuse the query parser
+   * into looking for an address (Town, Street) rather than a transit stop.
+   * Stripping the comma ("Oberiberg Wandli") reliably resolves the station.
    */
-  getSbbWebUrl(fromName, toName) {
-    return `https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=${encodeURIComponent(fromName)}&nach=${encodeURIComponent(toName)}&suche=true`;
+  cleanSbbName(name) {
+    if (!name) return '';
+    return name.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   },
 
   /**
-   * Generate SBB Mobile App Deep Link (for iOS / Android SBB Mobile app)
+   * Generate SBB Web Timetable URL
+   * Using clean station name without commas for reliable web autocomplete & search.
+   * Format: https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=...&nach=...&suche=true
+   */
+  getSbbWebUrl(fromName, toName) {
+    const cleanFrom = this.cleanSbbName(fromName);
+    const cleanTo = this.cleanSbbName(toName);
+    return `https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=${encodeURIComponent(cleanFrom)}&nach=${encodeURIComponent(cleanTo)}&suche=true`;
+  },
+
+  /**
+   * Generate SBB Mobile App Deep Link (for native iOS / Android SBB Mobile app)
    * Format: sbbmobile://timetable?from=...&to=...
    */
   getSbbMobileUrl(fromName, toName) {
-    return `sbbmobile://timetable?from=${encodeURIComponent(fromName)}&to=${encodeURIComponent(toName)}`;
+    const cleanFrom = this.cleanSbbName(fromName);
+    const cleanTo = this.cleanSbbName(toName);
+    return `sbbmobile://timetable?from=${encodeURIComponent(cleanFrom)}&to=${encodeURIComponent(cleanTo)}`;
+  },
+
+  /**
+   * Generate Universal SBB Mobile Web URL (https://app.sbbmobile.ch)
+   * Works on both mobile browsers and desktop, offering a 1-tap 'Open in App' button.
+   */
+  getSbbUniversalUrl(fromName, toName) {
+    const cleanFrom = this.cleanSbbName(fromName);
+    const cleanTo = this.cleanSbbName(toName);
+    return `https://app.sbbmobile.ch/timetable?from=${encodeURIComponent(cleanFrom)}&to=${encodeURIComponent(cleanTo)}`;
   },
 
   /**
