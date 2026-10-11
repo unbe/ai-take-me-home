@@ -76,6 +76,15 @@ function runTests() {
   if (mobileUrl !== 'sbbmobile://timetable?from=Oberiberg%20Wandli&to=Bern') {
     throw new Error(`SBB Mobile URL mismatch: ${mobileUrl}`);
   }
+  const webUrlCoords = Geo.getSbbWebUrl(
+    { name: 'Oberiberg, Wandli', uicRef: '8577501' },
+    { lat: 47.1234, lon: 8.5678 },
+    new Date('2026-10-12T00:24:00')
+  );
+  console.log('Test 6d: SBB Web URL (custom coordinates destination):', webUrlCoords);
+  if (webUrlCoords !== 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7E47.1234,8.5678&time=00_24') {
+    throw new Error(`SBB Web coordinates mismatch: ${webUrlCoords}`);
+  }
   console.log('Test 6: SBB link generation: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');

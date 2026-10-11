@@ -105,6 +105,7 @@ const UI = {
   inputPilotLat: document.getElementById('input-pilot-lat'),
   inputPilotLon: document.getElementById('input-pilot-lon'),
   inputPilotAlt: document.getElementById('input-pilot-alt'),
+  inputDestName: document.getElementById('input-dest-name'),
   inputDestLat: document.getElementById('input-dest-lat'),
   inputDestLon: document.getElementById('input-dest-lon'),
   inputStopsCount: document.getElementById('input-stops-count'),
@@ -145,6 +146,7 @@ function syncInputsFromState() {
   UI.inputPilotLat.value = State.pilot.lat.toFixed(4);
   UI.inputPilotLon.value = State.pilot.lon.toFixed(4);
   UI.inputPilotAlt.value = Math.round(State.pilot.altM);
+  if (UI.inputDestName) UI.inputDestName.value = State.destination.name || '';
   UI.inputDestLat.value = State.destination.lat.toFixed(4);
   UI.inputDestLon.value = State.destination.lon.toFixed(4);
   UI.inputStopsCount.value = State.settings.stopsCount;
@@ -165,8 +167,55 @@ function syncStateFromInputs() {
   State.pilot.lat = parseFloat(UI.inputPilotLat.value);
   State.pilot.lon = parseFloat(UI.inputPilotLon.value);
   State.pilot.altM = parseFloat(UI.inputPilotAlt.value) || 1000;
-  State.destination.lat = parseFloat(UI.inputDestLat.value);
-  State.destination.lon = parseFloat(UI.inputDestLon.value);
+
+  const newDestLat = parseFloat(UI.inputDestLat.value);
+  const newDestLon = parseFloat(UI.inputDestLon.value);
+  const typedName = UI.inputDestName ? UI.inputDestName.value.trim() : '';
+
+  // Check if destination coordinates changed from existing state
+  const coordsChanged =
+    Math.abs(newDestLat - State.destination.lat) > 0.0001 ||
+    Math.abs(newDestLon - State.destination.lon) > 0.0001;
+
+  State.destination.lat = newDestLat;
+  State.destination.lon = newDestLon;
+
+  // Check if new coordinates match any preset
+  const matchedPreset = Object.values(PRESETS).find(
+    p => Math.abs(p.dest.lat - newDestLat) < 0.005 && Math.abs(p.dest.lon - newDestLon) < 0.005
+  );
+
+  if (coordsChanged) {
+    if (matchedPreset) {
+      State.destination.name = matchedPreset.dest.name;
+      State.destination.uicRef = matchedPreset.dest.uicRef;
+      if (UI.inputDestName) UI.inputDestName.value = matchedPreset.dest.name;
+    } else {
+      // Changed to custom coordinates: do not retain previous preset name (e.g. Bern)
+      if (typedName && (!matchedPreset || typedName !== matchedPreset.dest.name) && typedName !== 'Bern') {
+        State.destination.name = typedName;
+      } else {
+        State.destination.name = `${newDestLat.toFixed(4)}, ${newDestLon.toFixed(4)}`;
+        if (UI.inputDestName) UI.inputDestName.value = State.destination.name;
+      }
+      State.destination.uicRef = null;
+    }
+  } else {
+    // Coordinates didn't change: check if user edited the name
+    if (typedName) {
+      State.destination.name = typedName;
+      State.destination.uicRef = (matchedPreset && matchedPreset.dest.name.toLowerCase() === typedName.toLowerCase())
+        ? matchedPreset.dest.uicRef
+        : null;
+    } else if (matchedPreset) {
+      State.destination.name = matchedPreset.dest.name;
+      State.destination.uicRef = matchedPreset.dest.uicRef;
+    } else {
+      State.destination.name = `${newDestLat.toFixed(4)}, ${newDestLon.toFixed(4)}`;
+      State.destination.uicRef = null;
+    }
+  }
+
   State.settings.stopsCount = parseInt(UI.inputStopsCount.value, 10) || 15;
   State.settings.searchRadiusKm = parseFloat(UI.inputSearchRadius.value) || 8;
   State.settings.speedKmH = parseFloat(UI.inputSpeed.value) || 30;
@@ -281,16 +330,6 @@ async function calculateRoutes() {
   // 1. Update map pins
   MapManager.setPilotMarker(pilot.lat, pilot.lon, pilot.altM);
   MapManager.setDestinationMarker(destination.lat, destination.lon, destination.name);
-
-  // Auto-resolve destination station DiDok ID if not yet cached
-  if (!destination.uicRef) {
-    try {
-      const res = await Transit.resolveStation(destination.name, destination.lat, destination.lon);
-      if (res?.id) {
-        destination.uicRef = res.id;
-      }
-    } catch (_) {}
-  }
 
   try {
     // 2. Discover nearest stops via Overpass API with Adaptive Glide Ratio Radius Expansion:
@@ -592,6 +631,23 @@ function initEvents() {
       applyPreset(presetKey);
     });
   });
+
+  // Dynamic update of destination name on coordinate input
+  const handleDestCoordInput = () => {
+    const lat = parseFloat(UI.inputDestLat.value);
+    const lon = parseFloat(UI.inputDestLon.value);
+    if (isNaN(lat) || isNaN(lon)) return;
+    const matched = Object.values(PRESETS).find(
+      p => Math.abs(p.dest.lat - lat) < 0.005 && Math.abs(p.dest.lon - lon) < 0.005
+    );
+    if (matched) {
+      if (UI.inputDestName) UI.inputDestName.value = matched.dest.name;
+    } else {
+      if (UI.inputDestName) UI.inputDestName.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    }
+  };
+  UI.inputDestLat.addEventListener('input', handleDestCoordInput);
+  UI.inputDestLon.addEventListener('input', handleDestCoordInput);
 
   // Map click to set location
   MapManager.onLocationSelected = (lat, lon) => {

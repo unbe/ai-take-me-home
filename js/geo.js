@@ -196,9 +196,12 @@ export const Geo = {
    */
   buildSbbStopToken(stopOrName) {
     if (!stopOrName) return '';
-    const name = typeof stopOrName === 'object' ? (stopOrName.name || '') : String(stopOrName);
+    let name = typeof stopOrName === 'object' ? (stopOrName.name || '') : String(stopOrName);
     const uicRef = typeof stopOrName === 'object' ? (stopOrName.uicRef || stopOrName.uic_ref || null) : null;
-    const cleanName = name.trim();
+    let cleanName = name.trim();
+    if (!cleanName && typeof stopOrName === 'object' && stopOrName.lat !== undefined && stopOrName.lon !== undefined) {
+      cleanName = `${stopOrName.lat.toFixed(4)},${stopOrName.lon.toFixed(4)}`;
+    }
     if (!cleanName) return '';
     return uicRef ? `${cleanName}_I${uicRef}` : cleanName;
   },
