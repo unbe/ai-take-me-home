@@ -193,24 +193,26 @@ export const MapManager = {
       
       const badgeColorClass = stop.feasibility.badgeClass;
       const glideText = stop.glideRatio !== null ? `${stop.glideRatio}:1` : 'N/A';
-      const transitText = Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes);
-      const totalTimeText = Geo.formatDurationMinutes(stop.totalTripMinutes);
+      const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
+      const transitText = hasLiveSchedule ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes) : 'No timetable';
+      const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
+        ? Geo.formatDurationMinutes(stop.totalTripMinutes)
+        : '--';
 
       // Departure and Arrival times
-      const depTime = Geo.formatTime(stop.transit?.departureTime);
-      const arrTime = Geo.formatTime(stop.transit?.arrivalTime);
+      const depTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
+      const arrTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : 'No service';
 
-      // Speed color-coding relative to the best option:
-      // Fastest tier (top 15% / within 15 min of best): Bright Cyan/Blue #0ea5e9
-      // Fast tier (next 35%): Emerald Green #10b981
-      // Moderate tier (next 30%): Amber/Yellow #f59e0b
-      // Slow tier (slowest 20%): Orange/Red #f97316
-      const tripMin = stop.totalTripMinutes || minTripMin;
-      const timeDiff = tripMin - minTripMin;
+      // Speed color-coding relative to the best option
+      const tripMin = (hasLiveSchedule && isFinite(stop.totalTripMinutes)) ? stop.totalTripMinutes : Infinity;
+      const timeDiff = (isFinite(tripMin) && isFinite(minTripMin)) ? tripMin - minTripMin : Infinity;
       let speedClass = 'speed-fastest';
       let speedBadgeText = '⚡ FASTEST';
 
-      if (index === 0 || timeDiff <= 10) {
+      if (!hasLiveSchedule) {
+        speedClass = 'speed-slow';
+        speedBadgeText = 'NO TIMETABLE';
+      } else if (index === 0 || timeDiff <= 10) {
         speedClass = 'speed-fastest';
         speedBadgeText = '⚡ FASTEST';
       } else if (timeDiff <= 30) {
@@ -242,8 +244,9 @@ export const MapManager = {
                 <span class="stop-badge-glide">📐 ${glideText}</span>
               </div>
               <div class="stop-badge-times-row">
-                <span class="badge-time-flow">🕒 ${depTime} ➔ ${arrTime}</span>
-                <span class="badge-time-total">(${totalTimeText})</span>
+                ${hasLiveSchedule
+                  ? `<span class="badge-time-flow">🕒 ${depTime} ➔ ${arrTime}</span> <span class="badge-time-total">(${totalTimeText})</span>`
+                  : `<span class="badge-time-flow" style="color: var(--text-muted)">⚠️ No scheduled service</span>`}
               </div>
             </div>
           </div>
@@ -290,15 +293,20 @@ export const MapManager = {
             </div>
             <div class="popup-row">
               <span>Transit Departure:</span>
-              <strong>${Geo.formatTime(stop.transit?.departureTime)}</strong>
+              <strong>${hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : 'None scheduled'}</strong>
             </div>
             <div class="popup-row">
               <span>Transit Duration:</span>
-              <strong>${transitText}</strong>
+              <strong>${hasLiveSchedule ? transitText : '--'}</strong>
             </div>
+            ${hasLiveSchedule && stop.transit?.waitAtStopMinutes >= 60 ? `
+            <div class="popup-row" style="color: var(--accent-amber);">
+              <span>Wait at stop:</span>
+              <strong>${Geo.formatDurationMinutes(stop.transit.waitAtStopMinutes)}</strong>
+            </div>` : ''}
             <div class="popup-row highlight">
               <span>Total Travel:</span>
-              <strong>${totalTimeText} (Arr ${Geo.formatTime(stop.transit?.arrivalTime)})</strong>
+              <strong>${hasLiveSchedule && isFinite(stop.totalTripMinutes) ? `${totalTimeText} (Arr ${Geo.formatTime(stop.transit?.arrivalTime)})` : 'No route scheduled'}</strong>
             </div>
             <div class="popup-legs">
               <small>${stop.transit?.summary || 'Transit route'}</small>

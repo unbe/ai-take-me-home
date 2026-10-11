@@ -27,12 +27,12 @@ export const Transit = {
       return this._cache.get(cacheKey);
     }
 
-    // numItineraries=1 and maxWalkDistance=500 trims payload by ~60% and speeds up MOTIS graph traversal
-    const url = `${this.ENDPOINT}?fromPlace=${encodeURIComponent(fromPlace)}&toPlace=${encodeURIComponent(toPlace)}&time=${encodeURIComponent(isoTime)}&numItineraries=1&maxWalkDistance=500`;
+    // numItineraries=1 and maxWalkDistance=1500 enables reachability to final coords without payload bloat
+    const url = `${this.ENDPOINT}?fromPlace=${encodeURIComponent(fromPlace)}&toPlace=${encodeURIComponent(toPlace)}&time=${encodeURIComponent(isoTime)}&numItineraries=1&maxWalkDistance=1500`;
 
     const headers = { 'Accept': 'application/json' };
     if (typeof navigator === 'undefined') {
-      headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+      headers['User-Agent'] = 'TakeMeHome-ParaglidingTransit/1.0 (https://github.com/artem/take-me-home)';
     }
 
     try {
@@ -123,37 +123,22 @@ export const Transit = {
   },
 
   /**
-   * Generates a fallback distance-based travel estimation when transit feed lacks coverage
+   * Generates a truthful fallback response when transit feed lacks scheduled service or cannot be reached
    */
-  generateFallbackRoute(fromStop, toCoord, targetDepartureDate, note = 'Estimated routing') {
+  generateFallbackRoute(fromStop, toCoord, targetDepartureDate, note = 'No scheduled transit found') {
     const transitDistKm = Geo.haversineDistanceKm(fromStop.lat, fromStop.lon, toCoord.lat, toCoord.lon);
-    // Estimated average speed: 45 km/h for regional transit + 10 min connection buffer
-    const estTransitMin = Math.round((transitDistKm / 45) * 60 + 10);
-    const departure = new Date(targetDepartureDate.getTime() + 5 * 60000); // 5 min buffer
-    const arrival = new Date(departure.getTime() + estTransitMin * 60000);
-
     return {
-      success: true,
+      success: false,
       hasSchedule: false,
       note,
-      departureTime: departure,
-      arrivalTime: arrival,
-      transitDurationMinutes: estTransitMin,
-      waitAtStopMinutes: 5,
-      transfers: 1,
-      legs: [
-        {
-          mode: 'TRANSIT',
-          line: 'Regional Service',
-          icon: '🚌',
-          durationMin: estTransitMin,
-          depTime: departure,
-          arrTime: arrival,
-          fromName: fromStop.name,
-          toName: 'Destination',
-        },
-      ],
-      summary: `Estimated (${Geo.formatDistance(transitDistKm)})`,
+      departureTime: null,
+      arrivalTime: null,
+      transitDurationMinutes: null,
+      waitAtStopMinutes: null,
+      transfers: 0,
+      legs: [],
+      summary: note,
+      directDistanceKm: Math.round(transitDistKm * 10) / 10,
     };
   },
 };

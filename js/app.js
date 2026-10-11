@@ -417,33 +417,37 @@ async function calculateRoutes() {
     });
 
     // 5. Query public transit strictly sequentially (1 request at a time)
-    // Only query live timetable API for feasible/marginal stops (capped to top candidates)
-    // Unreachable outliers get instant distance-based fallback routing, saving network roundtrips!
-    const MAX_LIVE_TRANSIT_QUERIES = 10;
+    // Query live timetable API for candidate stops that are feasible for flight
+    const maxLiveQueries = settings.stopsCount || 15;
     let liveQueriesCount = 0;
 
     for (let i = 0; i < stops.length; i++) {
       const stop = stops[i];
       const isViableForFlight = stop.feasibility.status === 'reachable' || stop.feasibility.status === 'marginal';
 
-      if (isViableForFlight && liveQueriesCount < MAX_LIVE_TRANSIT_QUERIES) {
+      if (isViableForFlight && liveQueriesCount < maxLiveQueries) {
         liveQueriesCount++;
-        setLoading(true, `Querying timetable ${liveQueriesCount}/${Math.min(stops.length, MAX_LIVE_TRANSIT_QUERIES)}: ${stop.name}...`);
+        setLoading(true, `Querying timetable ${liveQueriesCount}/${Math.min(stops.length, maxLiveQueries)}: ${stop.name}...`);
         stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
       } else {
-        // Instant estimation without waiting on API roundtrip
+        // Stop without live query or unreachable
         stop.transit = Transit.generateFallbackRoute(
           stop,
           destination,
           stop.targetDepartureDate,
-          isViableForFlight ? 'Estimated connection' : 'Unreachable by glide'
+          isViableForFlight ? 'No live timetable queried' : 'Unreachable by glide'
         );
       }
 
       // Total journey time from now to final destination arrival
-      stop.totalTripMinutes = Math.round(
-        stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
-      );
+      if (stop.transit && stop.transit.hasSchedule) {
+        stop.totalTripMinutes = Math.round(
+          stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
+        );
+      } else {
+        // Without confirmed schedule, sort behind real timetable options
+        stop.totalTripMinutes = Infinity;
+      }
 
       // Progressive live streaming: show first result as soon as ready!
       if (i === 0) {
@@ -455,8 +459,19 @@ async function calculateRoutes() {
       }
     }
 
-    // 6. Final sort by arrival time / total trip duration
-    stops.sort((a, b) => a.totalTripMinutes - b.totalTripMinutes);
+    // 6. Final sort: Confirmed live schedules first, ordered by total travel time
+    stops.sort((a, b) => {
+      const aHas = a.transit && a.transit.hasSchedule;
+      const bHas = b.transit && b.transit.hasSchedule;
+      if (aHas && !bHas) return -1;
+      if (!aHas && bHas) return 1;
+
+      if (a.totalTripMinutes !== b.totalTripMinutes) {
+        return a.totalTripMinutes - b.totalTripMinutes;
+      }
+
+      return a.distM - b.distM;
+    });
     State.stops = stops;
 
     // 6. Update Map with custom markers showing numbers & color codes
@@ -492,6 +507,7 @@ function renderResults(stops) {
 
   // Render #1 Best Option into Hero Card for instant glance
   const best = stops[0];
+  const bestHasSchedule = best.transit && best.transit.hasSchedule;
   UI.heroCard.style.display = 'flex';
   UI.heroBadge.className = `status-pill ${best.feasibility.badgeClass}`;
   UI.heroBadge.textContent = `${best.feasibility.label} (${best.glideRatio !== null ? `${best.glideRatio}:1` : 'N/A'})`;
@@ -500,8 +516,10 @@ function renderResults(stops) {
   UI.heroGlideDrop.textContent = `${best.altDropM >= 0 ? `-${best.altDropM}m drop` : `+${Math.abs(best.altDropM)}m uphill`}`;
   UI.heroReachVal.textContent = Geo.formatDurationMinutes(best.reachTimeMinutes);
   UI.heroDistVal.textContent = Geo.formatDistance(best.distKm);
-  UI.heroArrVal.textContent = Geo.formatTime(best.transit?.arrivalTime);
-  UI.heroTotalVal.textContent = `${Geo.formatDurationMinutes(best.totalTripMinutes)} total`;
+  UI.heroArrVal.textContent = bestHasSchedule ? Geo.formatTime(best.transit?.arrivalTime) : 'No service';
+  UI.heroTotalVal.textContent = bestHasSchedule && isFinite(best.totalTripMinutes)
+    ? `${Geo.formatDurationMinutes(best.totalTripMinutes)} total`
+    : '--';
 
   const destNameOrCoords = State.destination.name || `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
   const bestGmapsUrl = Geo.getGoogleMapsUrl(best.lat, best.lon, State.destination.lat, State.destination.lon);
@@ -534,13 +552,14 @@ function renderResults(stops) {
     card.className = `stop-card ${rank === 1 ? 'is-active' : ''}`;
     card.id = `stop-card-${stop.id}`;
 
+    const hasSchedule = stop.transit && stop.transit.hasSchedule;
     const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : 'N/A';
     const distText = Geo.formatDistance(stop.distKm);
     const reachText = Geo.formatDurationMinutes(stop.reachTimeMinutes);
-    const transitText = Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes);
-    const totalText = Geo.formatDurationMinutes(stop.totalTripMinutes);
-    const depTimeText = Geo.formatTime(stop.transit?.departureTime);
-    const arrTimeText = Geo.formatTime(stop.transit?.arrivalTime);
+    const transitText = hasSchedule ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes) : 'No timetable';
+    const totalText = hasSchedule && isFinite(stop.totalTripMinutes) ? Geo.formatDurationMinutes(stop.totalTripMinutes) : '--';
+    const depTimeText = hasSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
+    const arrTimeText = hasSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : 'No service';
 
     const gmapsUrl = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
     const sbbWebUrl = Geo.getSbbWebUrl(stop, State.destination, stop.transit?.departureTime || stop.targetDepartureDate);
@@ -576,7 +595,9 @@ function renderResults(stops) {
       </div>
 
       <div class="stop-card-route-summary">
-        <span>🕒 <strong>${depTimeText} ➔ ${arrTimeText}</strong> • ${stop.transit?.summary || 'Transit Route'}</span>
+        ${hasSchedule
+          ? `<span>🕒 <strong>${depTimeText} ➔ ${arrTimeText}</strong> • ${stop.transit?.summary || 'Transit Route'}${stop.transit?.waitAtStopMinutes >= 60 ? ` • <strong style="color: var(--accent-amber)">(${Geo.formatDurationMinutes(stop.transit.waitAtStopMinutes)} wait at stop)</strong>` : ''}</span>`
+          : `<span style="color: var(--text-muted)">⚠️ ${stop.transit?.summary || 'No scheduled transit found'}</span>`}
       </div>
 
       <div class="card-links-row">
