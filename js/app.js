@@ -282,13 +282,49 @@ async function calculateRoutes() {
   MapManager.setDestinationMarker(destination.lat, destination.lon, destination.name);
 
   try {
-    // 2. Discover nearest stops via Overpass API
-    setLoading(true, `Querying ${settings.stopsCount} nearest stops via Overpass API...`);
+    // 2. Discover nearest stops via Overpass API with Adaptive Glide Ratio Radius Expansion:
+    // If the stops found within the current radius still have great glide ratios (e.g. <= maxGlideRatio),
+    // keep expanding the search radius up to a strict 10km maximum to discover faster transit options.
+    const maxSearchRadiusM = Math.min(settings.searchRadiusKm * 1000, 10000);
+    setLoading(true, `Querying stops (expanding up to 10km if glide ratio is great)...`);
+
+    const shouldContinueExpanding = async (currentStops, currentRadiusM) => {
+      if (currentRadiusM >= 10000) return false;
+
+      // Check elevation and glide ratio for candidate stops found so far
+      await Elevation.populateStopElevations(currentStops);
+      let reachableCount = 0;
+      let greatGlideCount = 0;
+
+      for (const st of currentStops) {
+        const g = Geo.calculateGlideRatio(st.distM, pilot.altM, st.elevationM);
+        st.glideRatio = g.ratio;
+        st.altDropM = g.altDropM;
+        st.isUphill = g.isUphill;
+        // "Great" glide ratio: safely within pilot threshold (e.g. <= maxGlideRatio, default 7.5-8.0)
+        if (g.ratio !== null && !g.isUphill && g.ratio <= settings.maxGlideRatio) {
+          greatGlideCount++;
+        }
+        if (g.ratio !== null && !g.isUphill && g.ratio <= settings.maxGlideRatio + 2.0) {
+          reachableCount++;
+        }
+      }
+
+      // If at least 60% of stops or at least 5 stops have great glide ratios, keep expanding to 10km!
+      const isGlideStillGreat = greatGlideCount >= 5 || (greatGlideCount / currentStops.length) >= 0.5;
+      if (isGlideStillGreat && currentRadiusM < 10000) {
+        setLoading(true, `Glide ratio is great (${greatGlideCount} stops <= ${settings.maxGlideRatio}:1)! Expanding radius beyond ${Math.round(currentRadiusM / 1000)}km (up to 10km max)...`);
+        return true;
+      }
+      return false;
+    };
+
     const stops = await Overpass.findNearestStops(
       pilot.lat,
       pilot.lon,
       settings.stopsCount,
-      settings.searchRadiusKm * 1000
+      maxSearchRadiusM,
+      shouldContinueExpanding
     );
 
     // 3. Batch elevation lookup via Open-Meteo API

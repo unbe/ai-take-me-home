@@ -237,51 +237,66 @@ out center;`;
   /**
    * Finds the N nearest public transport stops using Exponential Radius Expansion:
    * Starts with a tight radius (e.g. 1,000m) and exponentially doubles the radius
-   * on each iteration (1km -> 2km -> 4km -> 8km -> 16km) until at least N stations
-   * are found. Capped at 5 queries maximum.
+   * Finds nearest public transport stops using Adaptive Exponential Radius Expansion:
+   * - Starts with a tight radius (e.g. 1,000m) and doubles the radius (1km -> 2km -> 4km -> 8km -> 10km).
+   * - Capped strictly at maxRadiusM (10,000m / 10km max).
+   * - If shouldContinueExpanding callback is provided and indicates stops found so far still have great glide ratios,
+   *   it keeps expanding up to maxRadiusM (max 5 queries) to discover even better transit connections.
    *
    * @param {number} lat Pilot latitude
    * @param {number} lon Pilot longitude
    * @param {number} count Number of nearest stops to return (N, default: 15)
-   * @param {number} maxRadiusM Maximum upper search radius in meters (default: 25000m)
+   * @param {number} maxRadiusM Maximum upper search radius in meters (strictly capped at 10,000m / 10km)
+   * @param {Function} shouldContinueExpanding Optional async callback (currentStops, currentRadiusM) => boolean
    * @returns {Promise<Array>} Array of parsed stop objects sorted by distance
    */
-  async findNearestStops(lat, lon, count = 15, maxRadiusM = 25000) {
+  async findNearestStops(lat, lon, count = 15, maxRadiusM = 10000, shouldContinueExpanding = null) {
     const MAX_QUERIES = 5;
     const baseRadiusM = 1000; // Start at 1,000 meters
+    const HARD_MAX_RADIUS_M = Math.min(maxRadiusM || 10000, 10000); // Strict 10km ceiling
     let stops = [];
 
     for (let attempt = 1; attempt <= MAX_QUERIES; attempt++) {
-      // Exponential increase: 1km -> 2km -> 4km -> 8km -> 16km (or up to maxRadius)
+      // Exponential increase: 1km -> 2km -> 4km -> 8km -> 10km
       let currentRadiusM = Math.round(baseRadiusM * Math.pow(2, attempt - 1));
-      if (attempt === MAX_QUERIES && currentRadiusM < maxRadiusM) {
-        currentRadiusM = maxRadiusM;
-      } else if (currentRadiusM > maxRadiusM) {
-        currentRadiusM = maxRadiusM;
+      if (currentRadiusM > HARD_MAX_RADIUS_M || attempt === MAX_QUERIES) {
+        currentRadiusM = HARD_MAX_RADIUS_M;
       }
 
-      console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Checking radius ${currentRadiusM}m (need ${count} stops)...`);
+      console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Checking radius ${currentRadiusM}m (need ${count} stops, max ${HARD_MAX_RADIUS_M}m)...`);
       stops = await this._queryAndParseStops(lat, lon, currentRadiusM);
       console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Found ${stops.length} unique stops`);
 
-      // If we found the required number of stations, stop immediately!
-      if (stops.length >= count) {
-        console.log(`[Overpass] Found required ${count} stops at ${currentRadiusM}m in ${attempt} query(ies).`);
-        return stops.slice(0, count);
+      // If already at or beyond the 10km hard ceiling, or on last attempt, return results
+      if (currentRadiusM >= HARD_MAX_RADIUS_M || attempt === MAX_QUERIES) {
+        break;
       }
 
-      // If already at or beyond maxRadiusM, no need to expand further
-      if (currentRadiusM >= maxRadiusM) {
-        break;
+      // If we met the count threshold, check if we should keep expanding
+      if (stops.length >= count) {
+        let keepGoing = false;
+        if (typeof shouldContinueExpanding === 'function') {
+          try {
+            keepGoing = await shouldContinueExpanding(stops, currentRadiusM);
+          } catch (e) {
+            console.warn('[Overpass] Error in shouldContinueExpanding callback:', e);
+            keepGoing = false;
+          }
+        }
+
+        if (!keepGoing) {
+          console.log(`[Overpass] Reached stop count threshold (${stops.length} >= ${count}) with satisfactory radius (${currentRadiusM}m). Stopping search.`);
+          return stops.slice(0, count);
+        }
+
+        console.log(`[Overpass] Glide ratio for stops found so far (${stops.length} stops) is still great! Expanding radius beyond ${currentRadiusM}m (up to ${HARD_MAX_RADIUS_M}m max)...`);
       }
     }
 
     if (stops.length === 0) {
-      throw new Error(`No public transport stops found after ${MAX_QUERIES} queries. Try a different area.`);
+      throw new Error(`No public transport stops found within ${Math.round(HARD_MAX_RADIUS_M / 1000)}km after ${MAX_QUERIES} queries. Try a different area.`);
     }
 
-    // Return whatever stops were found up to count
-    console.log(`[Overpass] Reached maximum ${MAX_QUERIES} queries; returning ${stops.length} found stops.`);
     return stops.slice(0, count);
   },
 };
