@@ -55,14 +55,23 @@ function runTests() {
     throw new Error('Duration formatting failed');
   }
   // Test 6: SBB URL generation
-  const webUrl = Geo.getSbbWebUrl('Oberiberg, Wandli', 'Bern');
+  const webUrlWithDidok = Geo.getSbbWebUrl(
+    { name: 'Oberiberg, Wandli', uicRef: '8577501' },
+    { name: 'Bern', uicRef: '8507000' },
+    new Date('2026-10-12T00:24:00')
+  );
+  const webUrlFallback = Geo.getSbbWebUrl('Oberiberg, Wandli', 'Bern', new Date('2026-10-12T00:24:00'));
   const mobileUrl = Geo.getSbbMobileUrl('Oberiberg, Wandli', 'Bern');
-  console.log('Test 6a: SBB Web URL:', webUrl);
-  console.log('Test 6b: SBB Mobile URL:', mobileUrl);
+  console.log('Test 6a: SBB Web URL (with DiDok):', webUrlWithDidok);
+  console.log('Test 6b: SBB Web URL (fallback):', webUrlFallback);
+  console.log('Test 6c: SBB Mobile URL:', mobileUrl);
 
-  // Commas must be stripped so SBB parses as transit stop rather than street address
-  if (webUrl !== 'https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=Oberiberg%20Wandli&nach=Bern&suche=true') {
-    throw new Error(`SBB Web URL mismatch: ${webUrl}`);
+  const expectedDidokUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7EBern_I8507000&time=00_24';
+  if (webUrlWithDidok !== expectedDidokUrl) {
+    throw new Error(`SBB Web URL mismatch:\nExpected: ${expectedDidokUrl}\nGot:      ${webUrlWithDidok}`);
+  }
+  if (webUrlFallback !== 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EBern&time=00_24') {
+    throw new Error(`SBB Web fallback mismatch: ${webUrlFallback}`);
   }
   if (mobileUrl !== 'sbbmobile://timetable?from=Oberiberg%20Wandli&to=Bern') {
     throw new Error(`SBB Mobile URL mismatch: ${mobileUrl}`);

@@ -310,7 +310,7 @@ export const MapManager = {
               <a class="card-link-btn sbb-app" href="${Geo.getSbbMobileUrl(stop.name, destCoord.name || `${destCoord.lat.toFixed(4)},${destCoord.lon.toFixed(4)}`)}">
                 <span>📱 SBB App</span>
               </a>
-              <a class="card-link-btn sbb" href="${Geo.getSbbWebUrl(stop.name, destCoord.name || `${destCoord.lat.toFixed(4)},${destCoord.lon.toFixed(4)}`)}" target="_blank" rel="noopener">
+              <a class="card-link-btn sbb" href="${Geo.getSbbWebUrl(stop, destCoord, stop.transit?.departureTime || stop.targetDepartureDate)}" target="_blank" rel="noopener">
                 <span>🚆 SBB Web</span>
               </a>
             </div>

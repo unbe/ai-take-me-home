@@ -156,4 +156,39 @@ export const Transit = {
       summary: `Estimated (${Geo.formatDistance(transitDistKm)})`,
     };
   },
+
+  /**
+   * Resolves station DiDok ID and official name using Swiss opendata API
+   */
+  async resolveStation(name, lat, lon) {
+    try {
+      let url = '';
+      if (name && isNaN(Number(name))) {
+        url = `https://transport.opendata.ch/v1/locations?query=${encodeURIComponent(name)}`;
+      } else if (lat !== undefined && lon !== undefined) {
+        url = `https://transport.opendata.ch/v1/locations?x=${lat}&y=${lon}`;
+      } else {
+        return null;
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const station = data?.stations?.find(s => s && s.id);
+      if (station && station.id) {
+        return {
+          id: String(station.id),
+          name: station.name,
+          lat: station.coordinate?.x,
+          lon: station.coordinate?.y,
+        };
+      }
+    } catch (e) {
+      console.warn('[Transit] Station resolution failed:', e.message);
+    }
+    return null;
+  },
 };
+

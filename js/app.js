@@ -19,6 +19,7 @@ const State = {
     lat: 46.9480,
     lon: 7.4474,
     name: 'Bern',
+    uicRef: '8507000',
   },
   settings: {
     stopsCount: 15,
@@ -35,31 +36,31 @@ const State = {
 const PRESETS = {
   interlaken: {
     pilot: { lat: 46.6863, lon: 7.8632, altM: 1600 },
-    dest: { lat: 46.9480, lon: 7.4474, name: 'Bern' },
+    dest: { lat: 46.9480, lon: 7.4474, name: 'Bern', uicRef: '8507000' },
     stopsCount: 15,
     radiusKm: 8,
   },
   annecy: {
     pilot: { lat: 45.8580, lon: 6.2230, altM: 1450 },
-    dest: { lat: 46.2044, lon: 6.1432, name: 'Geneva' },
+    dest: { lat: 46.2044, lon: 6.1432, name: 'Geneva', uicRef: '8501008' },
     stopsCount: 15,
     radiusKm: 10,
   },
   bassano: {
     pilot: { lat: 45.8080, lon: 11.7780, altM: 1200 },
-    dest: { lat: 45.4408, lon: 12.3155, name: 'Venice' },
+    dest: { lat: 45.4408, lon: 12.3155, name: 'Venice', uicRef: '8300098' },
     stopsCount: 15,
     radiusKm: 8,
   },
   steinhausen: {
     pilot: { lat: 47.1916, lon: 8.4837, altM: 800 },
-    dest: { lat: 47.3769, lon: 8.5417, name: 'Zurich HB' },
+    dest: { lat: 47.3769, lon: 8.5417, name: 'Zurich HB', uicRef: '8503000' },
     stopsCount: 15,
     radiusKm: 8,
   },
   verbier: {
     pilot: { lat: 46.0961, lon: 7.2286, altM: 2200 },
-    dest: { lat: 46.5197, lon: 6.6323, name: 'Lausanne' },
+    dest: { lat: 46.5197, lon: 6.6323, name: 'Lausanne', uicRef: '8501120' },
     stopsCount: 15,
     radiusKm: 10,
   },
@@ -281,6 +282,16 @@ async function calculateRoutes() {
   MapManager.setPilotMarker(pilot.lat, pilot.lon, pilot.altM);
   MapManager.setDestinationMarker(destination.lat, destination.lon, destination.name);
 
+  // Auto-resolve destination station DiDok ID if not yet cached
+  if (!destination.uicRef) {
+    try {
+      const res = await Transit.resolveStation(destination.name, destination.lat, destination.lon);
+      if (res?.id) {
+        destination.uicRef = res.id;
+      }
+    } catch (_) {}
+  }
+
   try {
     // 2. Discover nearest stops via Overpass API with Adaptive Glide Ratio Radius Expansion:
     // If the stops found within the current radius still have great glide ratios (e.g. <= maxGlideRatio),
@@ -455,7 +466,7 @@ function renderResults(stops) {
 
   const destNameOrCoords = State.destination.name || `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
   const bestGmapsUrl = Geo.getGoogleMapsUrl(best.lat, best.lon, State.destination.lat, State.destination.lon);
-  const bestSbbWebUrl = Geo.getSbbWebUrl(best.name, destNameOrCoords);
+  const bestSbbWebUrl = Geo.getSbbWebUrl(best, State.destination, best.transit?.departureTime || best.targetDepartureDate);
   const bestSbbAppUrl = Geo.getSbbMobileUrl(best.name, destNameOrCoords);
 
   if (UI.heroLinkGmaps) {
@@ -493,7 +504,7 @@ function renderResults(stops) {
     const arrTimeText = Geo.formatTime(stop.transit?.arrivalTime);
 
     const gmapsUrl = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
-    const sbbWebUrl = Geo.getSbbWebUrl(stop.name, destNameOrCoords);
+    const sbbWebUrl = Geo.getSbbWebUrl(stop, State.destination, stop.transit?.departureTime || stop.targetDepartureDate);
     const sbbAppUrl = Geo.getSbbMobileUrl(stop.name, destNameOrCoords);
 
     card.innerHTML = `

@@ -192,14 +192,40 @@ export const Geo = {
   },
 
   /**
-   * Generate SBB Web Timetable URL
-   * Using clean station name without commas for reliable web autocomplete & search.
-   * Format: https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=...&nach=...&suche=true
+   * Helper to build an SBB stop token with optional UIC/DiDok ID (e.g. "Oberiberg, Wandli_I8577501" or "Bern_I8507000")
    */
-  getSbbWebUrl(fromName, toName) {
-    const cleanFrom = this.cleanSbbName(fromName);
-    const cleanTo = this.cleanSbbName(toName);
-    return `https://www.sbb.ch/de/kaufen/pages/fahrplan/fahrplan.xhtml?von=${encodeURIComponent(cleanFrom)}&nach=${encodeURIComponent(cleanTo)}&suche=true`;
+  buildSbbStopToken(stopOrName) {
+    if (!stopOrName) return '';
+    const name = typeof stopOrName === 'object' ? (stopOrName.name || '') : String(stopOrName);
+    const uicRef = typeof stopOrName === 'object' ? (stopOrName.uicRef || stopOrName.uic_ref || null) : null;
+    const cleanName = name.trim();
+    if (!cleanName) return '';
+    return uicRef ? `${cleanName}_I${uicRef}` : cleanName;
+  },
+
+  /**
+   * Generate SBB Web Timetable URL
+   * Modern SBB URL format with DiDok station IDs and departure time:
+   * Format: https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7EBern_I8507000&time=00_24
+   */
+  getSbbWebUrl(from, to, departureDate) {
+    const fromToken = this.buildSbbStopToken(from);
+    const toToken = this.buildSbbStopToken(to);
+    const combined = `${fromToken}~${toToken}`;
+    const encodedStops = encodeURIComponent(combined)
+      .replace(/%20/g, '+')
+      .replace(/~/g, '%7E')
+      .replace(/%2C/g, ',');
+
+    let timeParam = '';
+    const d = departureDate ? (typeof departureDate === 'string' ? new Date(departureDate) : departureDate) : new Date();
+    if (!isNaN(d?.getTime())) {
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      timeParam = `&time=${hh}_${mm}`;
+    }
+
+    return `https://www.sbb.ch/en?stops=${encodedStops}${timeParam}`;
   },
 
   /**
