@@ -18,6 +18,7 @@ const State = {
   destination: {
     lat: 46.9480,
     lon: 7.4474,
+    resolvedStop: null,
   },
   settings: {
     stopsCount: 15,
@@ -37,7 +38,6 @@ const UI = {
   btnOpenInputs: document.getElementById('btn-open-inputs'),
   btnCloseInputs: document.getElementById('btn-close-inputs'),
   btnCalculate: document.getElementById('btn-calculate'),
-  fabRecalc: document.getElementById('fab-recalc'),
   btnGps: document.getElementById('btn-gps'),
   btnPilotGps: document.getElementById('btn-pilot-gps'),
   coordChip: document.getElementById('coord-chip'),
@@ -225,6 +225,18 @@ function syncStateFromInputs() {
 }
 
 /**
+ * Resolves destination coordinates to the nearest official Swiss station for SBB links
+ */
+async function updateDestinationResolution() {
+  const { lat, lon } = State.destination;
+  if (!isFinite(lat) || !isFinite(lon)) return;
+  const resolved = await Transit.resolveCoordinatesToStation(lat, lon);
+  if (resolved) {
+    State.destination.resolvedStop = resolved;
+  }
+}
+
+/**
  * Geolocation GPS handler
  */
 function useCurrentLocation(onFailure = null) {
@@ -344,10 +356,27 @@ function showTappedStopCard(stop, rank = 1) {
   }
 
   // Links
-  const destCoords = `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
+  // Google Maps accepts coordinates natively
   UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
-  UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, destCoords);
-  UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, State.destination, stop.transit?.departureTime || stop.targetDepartureDate);
+
+  // SBB requires a station name (does not understand coordinates)
+  let sbbDest = null;
+  if (stop.transit && stop.transit.destinationStopName) {
+    sbbDest = {
+      name: stop.transit.destinationStopName,
+      uicRef: State.destination.resolvedStop?.uicRef || null,
+    };
+  } else if (State.destination.resolvedStop) {
+    sbbDest = State.destination.resolvedStop;
+  }
+
+  if (sbbDest && sbbDest.name) {
+    UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, sbbDest.name);
+    UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, sbbDest, stop.transit?.departureTime || stop.targetDepartureDate);
+  } else {
+    UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, '');
+    UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, null, stop.transit?.departureTime || stop.targetDepartureDate);
+  }
 
   UI.tappedStopCard.style.display = 'flex';
 }
@@ -399,6 +428,10 @@ async function calculateRoutes(options = {}) {
   MapManager.setDestinationMarker(destination.lat, destination.lon);
   MapManager.centerOnPilot(pilot.lat, pilot.lon);
   MapManager.clearStops();
+
+  if (!destination.resolvedStop) {
+    updateDestinationResolution();
+  }
 
   try {
     // If pilot elevation needs to be updated (e.g. from setting pilot position via map contextmenu)
@@ -621,7 +654,6 @@ function initEvents() {
     closeInputPanel();
     calculateRoutes();
   });
-  UI.fabRecalc.addEventListener('click', calculateRoutes);
   UI.btnGps.addEventListener('click', () => useCurrentLocation());
 
   if (UI.btnCloseTappedCard) {
@@ -654,6 +686,8 @@ function initEvents() {
     hideTappedStopCard();
     State.destination.lat = lat;
     State.destination.lon = lon;
+    State.destination.resolvedStop = null;
+    updateDestinationResolution();
     syncInputsFromState();
     updateUrlFromState();
     showToast(`🏁 Destination set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
@@ -664,6 +698,7 @@ function initEvents() {
   window.addEventListener('popstate', () => {
     parseStateFromUrl();
     syncInputsFromState();
+    updateDestinationResolution();
     calculateRoutes();
   });
 }
@@ -677,6 +712,7 @@ async function init() {
   const { pilotSetInUrl } = parseStateFromUrl();
   syncInputsFromState();
   updateUrlFromState();
+  updateDestinationResolution();
 
   // Center map around pilot position FIRST
   MapManager.init('map', State.pilot.lat, State.pilot.lon, 13);

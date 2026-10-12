@@ -79,14 +79,25 @@ async function runTests() {
   if (mobileUrl !== 'sbbmobile://timetable?from=Oberiberg%20Wandli&to=Bern') {
     throw new Error(`SBB Mobile URL mismatch: ${mobileUrl}`);
   }
-  const webUrlCoords = Geo.getSbbWebUrl(
+  const webUrlResolved = Geo.getSbbWebUrl(
+    { name: 'Oberiberg, Wandli', uicRef: '8577501' },
+    { resolvedStop: { name: 'Steinhausen, Rigiweg', uicRef: '8595087' } },
+    new Date('2026-10-12T00:24:00')
+  );
+  console.log('Test 6d: SBB Web URL (with resolved destination stop):', webUrlResolved);
+  const expectedResolvedUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7ESteinhausen,+Rigiweg_I8595087&time=00_24';
+  if (webUrlResolved !== expectedResolvedUrl) {
+    throw new Error(`SBB Web resolved mismatch:\nExpected: ${expectedResolvedUrl}\nGot:      ${webUrlResolved}`);
+  }
+
+  // Ensure raw coordinates are never passed to SBB Web
+  const webUrlRawCoords = Geo.getSbbWebUrl(
     { name: 'Oberiberg, Wandli', uicRef: '8577501' },
     { lat: 47.1234, lon: 8.5678 },
     new Date('2026-10-12T00:24:00')
   );
-  console.log('Test 6d: SBB Web URL (custom coordinates destination):', webUrlCoords);
-  if (webUrlCoords !== 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7E47.1234,8.5678&time=00_24') {
-    throw new Error(`SBB Web coordinates mismatch: ${webUrlCoords}`);
+  if (webUrlRawCoords.includes('47.1234')) {
+    throw new Error('Raw coordinates should never be embedded in SBB Web URL');
   }
   console.log('Test 6: SBB link generation: PASS');
 
@@ -164,6 +175,14 @@ async function runTests() {
     throw new Error(`Abort test failed! Transit: ${transitAborted}, Elevation: ${elevAborted}, Overpass: ${overpassAborted}`);
   }
   console.log('Test 8: Immediate query abortion support: PASS');
+
+  // Test 9: Destination station resolution for SBB
+  const resolvedBern = await Transit.resolveCoordinatesToStation(46.9480, 7.4474);
+  console.log('Test 9: Resolved Bern coordinates to:', resolvedBern);
+  if (!resolvedBern || !resolvedBern.name || !resolvedBern.uicRef) {
+    throw new Error('Destination station resolution failed for Bern');
+  }
+  console.log('Test 9: Destination station resolution for SBB: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }

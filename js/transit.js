@@ -133,6 +133,9 @@ export const Transit = {
     });
 
     const transfers = Math.max(0, legs.filter(l => l.mode !== 'WALK').length - 1);
+    const transitLegs = legs.filter(l => l.mode !== 'WALK');
+    const lastTransitLeg = transitLegs.length > 0 ? transitLegs[transitLegs.length - 1] : null;
+    const destinationStopName = lastTransitLeg ? lastTransitLeg.toName : (legs.length > 0 ? legs[legs.length - 1].toName : null);
 
     return {
       success: true,
@@ -142,6 +145,7 @@ export const Transit = {
       transitDurationMinutes,
       waitAtStopMinutes,
       transfers,
+      destinationStopName: destinationStopName || null,
       legs,
       summary: legs.filter(l => l.mode !== 'WALK').map(l => `${l.icon} ${l.line || l.mode}`).join(' ➔ ') || '🚶 Walk direct',
     };
@@ -165,5 +169,36 @@ export const Transit = {
       summary: note,
       directDistanceKm: Math.round(transitDistKm * 10) / 10,
     };
+  },
+
+  /**
+   * Resolves coordinates to the nearest official Swiss transit station/stop
+   * Uses transport.opendata.ch API (returns official DiDok station names and UIC IDs).
+   * @param {number} lat
+   * @param {number} lon
+   * @returns {Promise<{name: string, uicRef: string|null}|null>}
+   */
+  async resolveCoordinatesToStation(lat, lon) {
+    if (!isFinite(lat) || !isFinite(lon)) return null;
+    try {
+      const url = `https://transport.opendata.ch/v1/locations?x=${lat.toFixed(6)}&y=${lon.toFixed(6)}`;
+      const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      const stations = data && data.stations ? data.stations : [];
+      // Prefer the first station with an official UIC/DiDok ID
+      const matchWithId = stations.find(s => s && s.id);
+      if (matchWithId && matchWithId.name) {
+        return { name: matchWithId.name, uicRef: String(matchWithId.id) };
+      }
+      if (stations.length > 0 && stations[0] && stations[0].name) {
+        return { name: stations[0].name, uicRef: stations[0].id ? String(stations[0].id) : null };
+      }
+    } catch (err) {
+      console.warn('[Transit] Destination station lookup failed:', err.message);
+    }
+    return null;
   },
 };

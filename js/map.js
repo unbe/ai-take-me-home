@@ -187,17 +187,14 @@ export const MapManager = {
     }
 
     const html = `
-      <div class="pilot-pin">
-        <div class="pilot-pin-icon">🪂</div>
-        <div class="pilot-pin-alt">${Math.round(altM)}m</div>
-      </div>
+      <div class="pilot-pin" title="Pilot: ${Math.round(altM)}m">🪂</div>
     `;
 
     const icon = L.divIcon({
       className: 'custom-pilot-marker',
       html,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     });
 
     this.pilotMarker = L.marker([lat, lon], { icon, zIndexOffset: 1000 }).addTo(this.markersLayer);

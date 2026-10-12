@@ -188,7 +188,12 @@ export const Geo = {
    */
   cleanSbbName(name) {
     if (!name) return '';
-    return name.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+    const trimmed = String(name).trim();
+    // Never pass raw coordinates to SBB since SBB does not understand them
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(trimmed)) {
+      return '';
+    }
+    return trimmed.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   },
 
   /**
@@ -196,11 +201,15 @@ export const Geo = {
    */
   buildSbbStopToken(stopOrName) {
     if (!stopOrName) return '';
+    if (typeof stopOrName === 'object' && stopOrName.resolvedStop) {
+      stopOrName = stopOrName.resolvedStop;
+    }
     let name = typeof stopOrName === 'object' ? (stopOrName.name || '') : String(stopOrName);
     const uicRef = typeof stopOrName === 'object' ? (stopOrName.uicRef || stopOrName.uic_ref || null) : null;
     let cleanName = name.trim();
-    if (!cleanName && typeof stopOrName === 'object' && stopOrName.lat !== undefined && stopOrName.lon !== undefined) {
-      cleanName = `${stopOrName.lat.toFixed(4)},${stopOrName.lon.toFixed(4)}`;
+    // Never pass raw coordinates to SBB as SBB cannot understand coordinate pairs
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(cleanName)) {
+      cleanName = '';
     }
     if (!cleanName) return '';
     return uicRef ? `${cleanName}_I${uicRef}` : cleanName;
@@ -214,7 +223,7 @@ export const Geo = {
   getSbbWebUrl(from, to, departureDate) {
     const fromToken = this.buildSbbStopToken(from);
     const toToken = this.buildSbbStopToken(to);
-    const combined = `${fromToken}~${toToken}`;
+    const combined = toToken ? `${fromToken}~${toToken}` : fromToken;
     const encodedStops = encodeURIComponent(combined)
       .replace(/%20/g, '+')
       .replace(/~/g, '%7E')
