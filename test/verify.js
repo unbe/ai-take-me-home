@@ -69,7 +69,7 @@ async function runTests() {
   console.log('Test 6b: SBB Web URL (with strings):', webUrlStrings);
   console.log('Test 6c: SBB Mobile URL:', mobileUrl);
 
-  const expectedAddressUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EKornhausplatz+2,+3011+Bern&time=00_24';
+  const expectedAddressUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EKornhausplatz+2,+3011+Bern&date=2026-10-12&time=00_24';
   if (webUrlWithAddress !== expectedAddressUrl) {
     throw new Error(`SBB Web URL mismatch:\nExpected: ${expectedAddressUrl}\nGot:      ${webUrlWithAddress}`);
   }
@@ -81,6 +81,12 @@ async function runTests() {
     throw new Error(`SBB Mobile URL mismatch:\nExpected: ${expectedMobileUrl}\nGot:      ${mobileUrl}`);
   }
 
+  // Verify Google Maps URL includes departure_time
+  const gmapsUrl = Geo.getGoogleMapsUrl(46.68, 7.85, 46.95, 7.44, new Date('2026-10-12T14:30:00Z'));
+  if (!gmapsUrl.includes('&departure_time=')) {
+    throw new Error('Google Maps URL should include departure_time parameter');
+  }
+
   // Ensure raw coordinates are never passed to SBB Web
   const webUrlRawCoords = Geo.getSbbWebUrl(
     { name: 'Oberiberg, Wandli' },
@@ -90,7 +96,7 @@ async function runTests() {
   if (webUrlRawCoords.includes('47.1234') || webUrlRawCoords.includes('8.5678')) {
     throw new Error('Raw coordinates should never be embedded in SBB Web URL');
   }
-  console.log('Test 6: SBB link generation: PASS');
+  console.log('Test 6: SBB link generation & Google Maps URL: PASS');
 
   // Test 7: URL query string reflection & parsing
   const testState = {

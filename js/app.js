@@ -330,9 +330,11 @@ function showTappedStopCard(stop, rank = 1) {
 
   const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : (stop.isUphill ? 'UP' : 'N/A');
   const dropText = stop.altDropM >= 0 ? `-${stop.altDropM}m drop` : `+${Math.abs(stop.altDropM)}m uphill`;
-  const depText = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
+  const transitDepDate = stop.transit?.transitDepartureTime || stop.transit?.departureTime;
+  const transitArrDate = stop.transit?.transitArrivalTime || stop.transit?.arrivalTime;
+  const depText = hasLiveSchedule ? Geo.formatTime(transitDepDate) : '--:--';
   const arrText = hasLiveSchedule
-    ? Geo.formatTime(stop.transit?.arrivalTime)
+    ? Geo.formatTime(transitArrDate)
     : (isQuerying ? 'Querying...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   UI.tappedRank.textContent = `#${rank}`;
@@ -353,7 +355,9 @@ function showTappedStopCard(stop, rank = 1) {
     : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   if (hasLiveSchedule) {
-    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${stop.transit?.summary || 'Transit route'}`;
+    const hasInitialWalk = stop.transit.legs?.[0]?.mode === 'WALK' && stop.transit.legs[0].durationMin >= 2;
+    const leaveNote = hasInitialWalk ? ` (leave stop ${Geo.formatTime(stop.transit.departureTime)})` : '';
+    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong>${leaveNote} • ${stop.transit?.summary || 'Transit route'}`;
   } else if (isQuerying) {
     UI.tappedLegs.textContent = '⏳ Live timetable query currently in progress...';
   } else if (!stop.transit) {
@@ -363,14 +367,14 @@ function showTappedStopCard(stop, rank = 1) {
   }
 
   // Links
-  // Google Maps accepts coordinates natively
-  UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
+  // Google Maps accepts coordinates natively with departure timestamp
+  const targetDepTime = stop.transit?.departureTime || stop.targetDepartureDate;
+  UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon, targetDepTime);
 
   // SBB links: source is the stop name, destination is the geocoded address
   const destAddress = State.destination.address || '';
-  const depTime = stop.transit?.departureTime || stop.targetDepartureDate;
   UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, destAddress);
-  UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop.name, destAddress, depTime);
+  UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop.name, destAddress, targetDepTime);
 
   UI.tappedStopCard.style.display = 'flex';
 }

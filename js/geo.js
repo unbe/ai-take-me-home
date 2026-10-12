@@ -326,15 +326,18 @@ export const Geo = {
       .replace(/~/g, '%7E')
       .replace(/%2C/g, ',');
 
-    let timeParam = '';
+    let dateTimeParam = '';
     const d = departureDate ? (typeof departureDate === 'string' ? new Date(departureDate) : departureDate) : new Date();
     if (!isNaN(d?.getTime())) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
       const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      timeParam = `&time=${hh}_${mm}`;
+      const min = String(d.getMinutes()).padStart(2, '0');
+      dateTimeParam = `&date=${yyyy}-${mm}-${dd}&time=${hh}_${min}`;
     }
 
-    return `https://www.sbb.ch/en?stops=${encodedStops}${timeParam}`;
+    return `https://www.sbb.ch/en?stops=${encodedStops}${dateTimeParam}`;
   },
 
   /**
@@ -367,9 +370,16 @@ export const Geo = {
   },
 
   /**
-   * Generate Google Maps Transit Directions URL
+   * Generate Google Maps Transit Directions URL with optional departure timestamp
    */
-  getGoogleMapsUrl(originLat, originLon, destLat, destLon) {
-    return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit`;
+  getGoogleMapsUrl(originLat, originLon, destLat, destLon, departureDate = null) {
+    let depParam = '';
+    if (departureDate) {
+      const d = typeof departureDate === 'string' ? new Date(departureDate) : departureDate;
+      if (!isNaN(d?.getTime())) {
+        depParam = `&departure_time=${Math.floor(d.getTime() / 1000)}`;
+      }
+    }
+    return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit${depParam}`;
   },
 };

@@ -140,18 +140,39 @@ export const Transit = {
     const lastTransitLeg = transitLegs.length > 0 ? transitLegs[transitLegs.length - 1] : null;
     const destinationStopName = lastTransitLeg ? lastTransitLeg.toName : (legs.length > 0 ? legs[legs.length - 1].toName : null);
 
+    // Official scheduled transit vehicle departure and arrival times (matching SBB & Google Maps schedules)
+    const transitDepartureTime = firstTransitLeg?.depTime || actualDeparture;
+    const transitArrivalTime = lastTransitLeg?.arrTime || arrival;
+
+    // Detailed summary including significant walking legs (>= 2 min)
+    const summaryParts = legs.map((l, idx) => {
+      if (l.mode === 'WALK') {
+        if (l.durationMin >= 2) {
+          if (idx === 0) return `🚶 ${l.durationMin}m to ${l.toName || 'station'}`;
+          if (idx === legs.length - 1) return `🚶 ${l.durationMin}m to destination`;
+          return `🚶 ${l.durationMin}m`;
+        }
+        return null;
+      }
+      return `${l.icon} ${l.line || l.mode}`;
+    }).filter(Boolean);
+
+    const summary = summaryParts.join(' ➔ ') || '🚶 Walk direct';
+
     return {
       success: true,
       hasSchedule: true,
       departureTime: actualDeparture,
       arrivalTime: arrival,
+      transitDepartureTime,
+      transitArrivalTime,
       transitDurationMinutes,
       waitAtStopMinutes,
       transfers,
       destinationStopName: destinationStopName || null,
       legs,
       firstIcon,
-      summary: legs.filter(l => l.mode !== 'WALK').map(l => `${l.icon} ${l.line || l.mode}`).join(' ➔ ') || '🚶 Walk direct',
+      summary,
     };
   },
 
