@@ -585,18 +585,15 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
 
 /* Segment layout adjustments */
 .pill-seg.pill-dep {
-  padding-right: 4px;
+  padding-right: 3px;
 }
 .pill-seg.pill-icon {
-  background: rgba(15, 23, 42, 0.95);
   font-size: 10px;
   padding: 2px 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 .pill-seg.pill-arr {
-  padding-left: 4px;
-  border-right: 1px solid rgba(255, 255, 255, 0.25);
+  padding-left: 3px;
+  border-right: 1.5px solid rgba(255, 255, 255, 0.3);
 }
 
 /* --- TIME / SCHEDULE COLOR TIERS --- */

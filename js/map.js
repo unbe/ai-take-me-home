@@ -375,6 +375,19 @@ export const MapManager = {
         }
       }
 
+      // Blended background for the mode of transport icon (gradient from departure color to arrival color)
+      const tierColors = {
+        'tier-best': '#0284c7',
+        'tier-good': '#0d9488',
+        'tier-moderate': '#d97706',
+        'tier-poor': '#dc2626',
+        'tier-querying': '#1e293b',
+        'tier-none': '#475569',
+      };
+      const depColor = tierColors[depClass] || '#475569';
+      const arrColor = tierColors[arrClass] || '#475569';
+      const iconBg = `linear-gradient(to right, ${depColor}, ${arrColor})`;
+
       // 2. Glide value & color class
       const glidePillText = stop.glideRatio !== null
         ? `${stop.glideRatio}:1`
@@ -412,6 +425,7 @@ export const MapManager = {
             const iconSeg = pill.querySelector('.pill-icon');
             if (iconSeg) {
               iconSeg.textContent = transportIcon;
+              iconSeg.style.background = iconBg;
             }
             const arrSeg = pill.querySelector('.pill-arr');
             if (arrSeg) {
@@ -431,7 +445,7 @@ export const MapManager = {
           <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: Dep ${depTime}, Arr ${arrTime}, Glide ${glidePillText}">
             <div class="stop-pill-capsule">
               <span class="pill-seg pill-dep ${depClass}">${depTime}</span>
-              <span class="pill-seg pill-icon">${transportIcon}</span>
+              <span class="pill-seg pill-icon" style="background: ${iconBg};">${transportIcon}</span>
               <span class="pill-seg pill-arr ${arrClass}">${arrTime}</span>
               <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
             </div>
