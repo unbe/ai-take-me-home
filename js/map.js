@@ -291,9 +291,7 @@ export const MapManager = {
       }
     }
 
-    // Calculate extremes among confirmed timetable options:
-    // - Latest departure is best (gives pilot maximum flight time)
-    // - Earliest arrival is best (gets pilot home quickest)
+    // Calculate earliest arrival among confirmed timetable options:
     const confirmedStops = stops.filter(s =>
       s.transit &&
       s.transit.hasSchedule &&
@@ -301,14 +299,14 @@ export const MapManager = {
       s.transit.arrivalTime
     );
 
-    let maxDepMs = -Infinity;
     let minArrMs = Infinity;
     for (const s of confirmedStops) {
-      const depT = new Date(s.transit.departureTime).getTime();
       const arrT = new Date(s.transit.arrivalTime).getTime();
-      if (!isNaN(depT) && depT > maxDepMs) maxDepMs = depT;
       if (!isNaN(arrT) && arrT < minArrMs) minArrMs = arrT;
     }
+
+    const tierRank = { 'tier-best': 0, 'tier-good': 1, 'tier-moderate': 2, 'tier-poor': 3 };
+    const tierNames = ['tier-best', 'tier-good', 'tier-moderate', 'tier-poor'];
 
     stops.forEach((stop, index) => {
       const rank = index + 1;
@@ -331,35 +329,49 @@ export const MapManager = {
       const depTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : (isQuerying ? '...' : '--');
       const arrTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : (isQuerying ? '...' : '--');
 
-      // 1. Separate Color Tiers:
-      // - Latest departure is best (tier-best)
-      // - Earliest arrival is best (tier-best)
+      // 1. Smart Correlated Color Tiers:
+      // - Earliest arrival is best (gets pilot home quickest).
+      // - When arrival is about the same, departure is differentiated (latest departure is best).
+      // - When arrival is bad/late, departure is colored as bad too (capped by arrival tier).
       let depClass = 'tier-none';
       let arrClass = 'tier-none';
 
       if (isQuerying) {
         depClass = 'tier-querying';
         arrClass = 'tier-querying';
-      } else if (hasLiveSchedule && isFinite(maxDepMs) && isFinite(minArrMs)) {
+      } else if (hasLiveSchedule && isFinite(minArrMs)) {
         const depMs = new Date(stop.transit.departureTime).getTime();
         const arrMs = new Date(stop.transit.arrivalTime).getTime();
 
-        // Departure: minutes earlier than latest departure (0 = best)
-        if (!isNaN(depMs)) {
-          const depDiffMin = Math.max(0, (maxDepMs - depMs) / 60000);
-          if (depDiffMin <= 10) depClass = 'tier-best';
-          else if (depDiffMin <= 30) depClass = 'tier-good';
-          else if (depDiffMin <= 60) depClass = 'tier-moderate';
-          else depClass = 'tier-poor';
-        }
-
-        // Arrival: minutes later than earliest arrival (0 = best)
-        if (!isNaN(arrMs)) {
+        if (!isNaN(arrMs) && !isNaN(depMs)) {
+          // A. Arrival tier: Earliest arrival is best
           const arrDiffMin = Math.max(0, (arrMs - minArrMs) / 60000);
-          if (arrDiffMin <= 10) arrClass = 'tier-best';
-          else if (arrDiffMin <= 30) arrClass = 'tier-good';
+          if (arrDiffMin <= 15) arrClass = 'tier-best';
+          else if (arrDiffMin <= 35) arrClass = 'tier-good';
           else if (arrDiffMin <= 60) arrClass = 'tier-moderate';
           else arrClass = 'tier-poor';
+
+          // B. Departure tier within similar arrival cohort:
+          // Look at options arriving around the same time (within 20m of this stop's arrival)
+          const arrivalCohort = confirmedStops.filter(s => {
+            const aT = new Date(s.transit.arrivalTime).getTime();
+            return !isNaN(aT) && aT <= arrMs + 20 * 60000;
+          });
+          const maxDepInCohort = Math.max(
+            depMs,
+            ...arrivalCohort.map(s => new Date(s.transit.departureTime).getTime()).filter(t => !isNaN(t))
+          );
+
+          const depDiffMin = Math.max(0, (maxDepInCohort - depMs) / 60000);
+          let rawDepClass = 'tier-poor';
+          if (depDiffMin <= 10) rawDepClass = 'tier-best';
+          else if (depDiffMin <= 25) rawDepClass = 'tier-good';
+          else if (depDiffMin <= 45) rawDepClass = 'tier-moderate';
+
+          // C. Smart correlation: When arrival is bad/late, color departure as bad too.
+          // Departure tier cannot rank higher than arrival tier.
+          const finalDepRank = Math.max(tierRank[rawDepClass] ?? 3, tierRank[arrClass] ?? 3);
+          depClass = tierNames[finalDepRank] || 'tier-poor';
         }
       }
 
