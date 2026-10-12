@@ -385,6 +385,7 @@ async function calculateRoutes() {
   // 1. Update map pins
   MapManager.setPilotMarker(pilot.lat, pilot.lon, pilot.altM);
   MapManager.setDestinationMarker(destination.lat, destination.lon, destination.name);
+  MapManager.clearStops();
 
   try {
     // 2. Discover nearest stops via Overpass API with Adaptive Glide Ratio Radius Expansion:

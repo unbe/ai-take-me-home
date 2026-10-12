@@ -243,18 +243,39 @@ export const MapManager = {
   },
 
   /**
-   * Renders candidate stop markers with numerical & color-coded badges
+   * Clears all candidate stop markers and flight lines
+   */
+  clearStops() {
+    this.linesLayer.clearLayers();
+    this.flightLines = {};
+    for (const [id, marker] of Object.entries(this.stopMarkers)) {
+      this.markersLayer.removeLayer(marker);
+    }
+    this.stopMarkers = {};
+  },
+
+  /**
+   * Renders candidate stop markers with numerical & color-coded badges.
+   * Updates existing markers and flight lines in-place to prevent blinking during progressive streaming!
    */
   renderStops(stops, pilotCoord, destCoord, onStopClick, shouldFitBounds = false) {
-    this.linesLayer.clearLayers();
-    this.stopMarkers = {};
-    this.flightLines = {};
+    const currentStopIds = new Set(stops.map(s => String(s.id)));
 
-    this.markersLayer.eachLayer(layer => {
-      if (layer !== this.pilotMarker && layer !== this.destMarker) {
-        this.markersLayer.removeLayer(layer);
+    // Remove any markers that are no longer part of current stops
+    for (const [id, marker] of Object.entries(this.stopMarkers)) {
+      if (!currentStopIds.has(String(id))) {
+        this.markersLayer.removeLayer(marker);
+        delete this.stopMarkers[id];
       }
-    });
+    }
+
+    // Remove any flight lines that are no longer part of current stops
+    for (const [id, line] of Object.entries(this.flightLines)) {
+      if (!currentStopIds.has(String(id))) {
+        this.linesLayer.removeLayer(line);
+        delete this.flightLines[id];
+      }
+    }
 
     // Determine speed tier relative to confirmed timetable options
     const confirmedStops = stops.filter(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
@@ -306,77 +327,134 @@ export const MapManager = {
       const isBest = index === 0 && hasLiveSchedule && isFinite(stop.totalTripMinutes);
       const isSelected = String(this.selectedStopId) === String(stop.id);
 
-      // Mobile-friendly ultra-compact marker: color-coded Time (dep -> arr) + color-coded Glide only
-      const markerHtml = `
-        <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: ${timePillText}, Glide ${glidePillText}">
-          <div class="stop-pill-capsule">
-            <span class="pill-seg pill-time ${timeClass}">${timePillText}</span>
-            <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
+      let marker = this.stopMarkers[stop.id];
+      if (marker) {
+        // UPDATE EXISTING MARKER IN-PLACE (No DOM destroy/recreate -> Zero blinking!)
+        marker._stopData = stop;
+        marker._stopRank = rank;
+        marker.setZIndexOffset(isSelected ? 1200 : (500 - index));
+        const el = marker.getElement();
+        if (el) {
+          const pill = el.querySelector('.stop-pill-marker');
+          if (pill) {
+            pill.className = `stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}`;
+            pill.title = `${stop.name}: ${timePillText}, Glide ${glidePillText}`;
+            const timeSeg = pill.querySelector('.pill-time');
+            if (timeSeg) {
+              timeSeg.className = `pill-seg pill-time ${timeClass}`;
+              timeSeg.textContent = timePillText;
+            }
+            const glideSeg = pill.querySelector('.pill-glide');
+            if (glideSeg) {
+              glideSeg.className = `pill-seg pill-glide ${glideClass}`;
+              glideSeg.textContent = glidePillText;
+            }
+          }
+        }
+      } else {
+        // CREATE NEW MARKER
+        const markerHtml = `
+          <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: ${timePillText}, Glide ${glidePillText}">
+            <div class="stop-pill-capsule">
+              <span class="pill-seg pill-time ${timeClass}">${timePillText}</span>
+              <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
+            </div>
+            <div class="stop-pill-pin"></div>
+            <div class="stop-pill-dot"></div>
           </div>
-          <div class="stop-pill-pin"></div>
-          <div class="stop-pill-dot"></div>
-        </div>
-      `;
+        `;
 
-      const stopIcon = L.divIcon({
-        className: 'custom-stop-marker-container',
-        html: markerHtml,
-        iconSize: [140, 30],
-        iconAnchor: [70, 30],
-      });
+        const stopIcon = L.divIcon({
+          className: 'custom-stop-marker-container',
+          html: markerHtml,
+          iconSize: [140, 30],
+          iconAnchor: [70, 30],
+        });
 
-      const marker = L.marker([stop.lat, stop.lon], {
-        icon: stopIcon,
-        zIndexOffset: isSelected ? 1200 : (500 - index),
-        riseOnHover: true,
-      });
-      marker._stopId = stop.id;
+        marker = L.marker([stop.lat, stop.lon], {
+          icon: stopIcon,
+          zIndexOffset: isSelected ? 1200 : (500 - index),
+          riseOnHover: true,
+        });
+        marker._stopId = stop.id;
+        marker._stopData = stop;
+        marker._stopRank = rank;
 
-      // Click / tap handler: DO NOT show duplicate popup on map. Only notify onStopClick to show bottom card!
-      const triggerSelect = (e) => {
-        if (e && e.originalEvent) {
-          L.DomEvent.stopPropagation(e.originalEvent);
-        } else if (e) {
-          L.DomEvent.stopPropagation(e);
+        const triggerSelect = (e) => {
+          if (e && e.originalEvent) {
+            L.DomEvent.stopPropagation(e.originalEvent);
+          } else if (e) {
+            L.DomEvent.stopPropagation(e);
+          }
+          if (typeof onStopClick === 'function') {
+            onStopClick(marker._stopData || stop, marker._stopRank || rank);
+          }
+        };
+
+        marker.on('click', triggerSelect);
+        marker.addTo(this.markersLayer);
+
+        const el = marker.getElement();
+        if (el) {
+          L.DomEvent.on(el, 'click', triggerSelect);
         }
-        if (typeof onStopClick === 'function') {
-          onStopClick(stop, rank);
-        }
-      };
 
-      marker.on('click', triggerSelect);
-      marker.addTo(this.markersLayer);
-
-      const el = marker.getElement();
-      if (el) {
-        L.DomEvent.on(el, 'click', triggerSelect);
+        this.stopMarkers[stop.id] = marker;
       }
 
-      this.stopMarkers[stop.id] = marker;
-
-      // Draw flight glide line from pilot to stop (interactive: false so line never blocks taps)
+      // FLIGHT GLIDE LINE: UPDATE IN-PLACE OR CREATE
       const lineColor = stop.feasibility.color;
-      const polyline = L.polyline(
-        [[pilotCoord.lat, pilotCoord.lon], [stop.lat, stop.lon]],
-        {
-          color: isSelected ? '#38bdf8' : lineColor,
-          weight: isSelected ? 5.5 : (rank === 1 ? 4 : 2.5),
-          opacity: isSelected ? 1.0 : (this.selectedStopId ? 0.25 : 0.85),
-          dashArray: isReachable ? null : '6, 6',
-          interactive: false,
+      let polyline = this.flightLines[stop.id];
+      if (polyline) {
+        polyline._defaultColor = lineColor;
+        polyline._defaultWeight = rank === 1 ? 4 : 2.5;
+        polyline._defaultDashArray = isReachable ? null : '6, 6';
+        if (!this.selectedStopId) {
+          polyline.setStyle({
+            color: lineColor,
+            weight: rank === 1 ? 4 : 2.5,
+            opacity: 0.85,
+            dashArray: isReachable ? null : '6, 6',
+          });
+        } else if (isSelected) {
+          polyline.setStyle({
+            color: '#38bdf8',
+            weight: 5.5,
+            opacity: 1.0,
+            dashArray: null,
+          });
+          polyline.bringToFront();
+        } else {
+          polyline.setStyle({
+            color: lineColor,
+            weight: 1.8,
+            opacity: 0.25,
+            dashArray: isReachable ? null : '6, 6',
+          });
         }
-      );
-      polyline._defaultColor = lineColor;
-      polyline._defaultWeight = rank === 1 ? 4 : 2.5;
-      polyline._defaultOpacity = 0.85;
-      polyline._defaultDashArray = isReachable ? null : '6, 6';
-      polyline.addTo(this.linesLayer);
+      } else {
+        polyline = L.polyline(
+          [[pilotCoord.lat, pilotCoord.lon], [stop.lat, stop.lon]],
+          {
+            color: isSelected ? '#38bdf8' : lineColor,
+            weight: isSelected ? 5.5 : (rank === 1 ? 4 : 2.5),
+            opacity: isSelected ? 1.0 : (this.selectedStopId ? 0.25 : 0.85),
+            dashArray: isReachable ? null : '6, 6',
+            interactive: false,
+          }
+        );
+        polyline._defaultColor = lineColor;
+        polyline._defaultWeight = rank === 1 ? 4 : 2.5;
+        polyline._defaultOpacity = 0.85;
+        polyline._defaultDashArray = isReachable ? null : '6, 6';
+        polyline.addTo(this.linesLayer);
 
-      if (isSelected) {
-        polyline.bringToFront();
+        if (isSelected) {
+          polyline.bringToFront();
+        }
+
+        this.flightLines[stop.id] = polyline;
       }
-
-      this.flightLines[stop.id] = polyline;
     });
 
     if (shouldFitBounds) {
