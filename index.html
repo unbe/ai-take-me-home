@@ -15,28 +15,16 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=4.7" />
+  <link rel="stylesheet" href="css/styles.css?v=4.8" />
 </head>
 <body>
   <div class="app-container">
     <!-- LEAFLET MAP VIEWPORT -->
     <div id="map"></div>
 
-    <!-- FLOATING TOP NAVIGATION -->
+    <!-- FLOATING TOP SUMMARY CHIP & SETTINGS -->
     <header class="top-nav">
-      <div class="top-bar-content">
-        <div class="app-title">
-          <span>🪂 Take Me Home</span>
-          <span class="app-badge">Glider Nav</span>
-        </div>
-        <div class="nav-actions">
-          <button id="btn-gps" class="btn-icon" title="Find my current location" aria-label="Locate me">🛰️</button>
-          <button id="btn-open-inputs" class="btn-icon" title="Coordinates & Settings" aria-label="Open settings">⚙️</button>
-        </div>
-      </div>
-
-      <!-- COLLAPSIBLE SUMMARY CHIP (Glanceable on mobile) -->
-      <div id="coord-chip" class="coord-chip" title="Tap to change coordinates">
+      <div id="coord-chip" class="coord-chip" title="Tap to change coordinates & settings">
         <div class="coord-chip-details">
           <span>📍</span>
           <span id="chip-pilot-text">1500m</span>
@@ -44,11 +32,16 @@
           <span>🏁</span>
           <span id="chip-dest-text">Bern</span>
         </div>
-        <button class="chip-edit-btn">Change</button>
+        <button id="btn-open-inputs" class="chip-edit-btn" title="Coordinates & Settings" aria-label="Open settings">⚙️</button>
       </div>
     </header>
 
-    <!-- FLOATING ACTION BUTTONS -->
+    <!-- FLOATING GPS BUTTON (Down Left) -->
+    <div class="fab-gps-container">
+      <button id="btn-gps" class="fab-btn" title="Find my current location" aria-label="Locate me">🛰️</button>
+    </div>
+
+    <!-- FLOATING RECALCULATE BUTTON (Down Right) -->
     <div class="fab-container">
       <button id="fab-recalc" class="fab-btn primary" title="Recalculate stops" aria-label="Recalculate">⚡</button>
     </div>
@@ -219,6 +212,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=4.7"></script>
+  <script type="module" src="js/app.js?v=4.8"></script>
 </body>
 </html>
