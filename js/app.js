@@ -330,11 +330,9 @@ function showTappedStopCard(stop, rank = 1) {
 
   const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : (stop.isUphill ? 'UP' : 'N/A');
   const dropText = stop.altDropM >= 0 ? `-${stop.altDropM}m drop` : `+${Math.abs(stop.altDropM)}m uphill`;
-  const transitDepDate = stop.transit?.transitDepartureTime || stop.transit?.departureTime;
-  const transitArrDate = stop.transit?.transitArrivalTime || stop.transit?.arrivalTime;
-  const depText = hasLiveSchedule ? Geo.formatTime(transitDepDate) : '--:--';
+  const depText = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
   const arrText = hasLiveSchedule
-    ? Geo.formatTime(transitArrDate)
+    ? Geo.formatTime(stop.transit?.arrivalTime)
     : (isQuerying ? 'Querying...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   UI.tappedRank.textContent = `#${rank}`;
@@ -355,9 +353,7 @@ function showTappedStopCard(stop, rank = 1) {
     : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   if (hasLiveSchedule) {
-    const hasInitialWalk = stop.transit.legs?.[0]?.mode === 'WALK' && stop.transit.legs[0].durationMin >= 2;
-    const leaveNote = hasInitialWalk ? ` (leave stop ${Geo.formatTime(stop.transit.departureTime)})` : '';
-    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong>${leaveNote} • ${stop.transit?.summary || 'Transit route'}`;
+    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${stop.transit?.summary || 'Transit route'}`;
   } else if (isQuerying) {
     UI.tappedLegs.textContent = '⏳ Live timetable query currently in progress...';
   } else if (!stop.transit) {

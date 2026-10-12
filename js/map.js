@@ -311,12 +311,10 @@ export const MapManager = {
         transportIcon = stop.icon || (stop.type === 'station' ? '🚆' : '🚌');
       }
 
-      // 1. Time string: departure [transport icon] arrival time, e.g. "00:02 🚆 06:18"
-      // Uses scheduled transit vehicle times to match official SBB and Google Maps connection timetables
-      const depDate = stop.transit?.transitDepartureTime || stop.transit?.departureTime;
-      const arrDate = stop.transit?.transitArrivalTime || stop.transit?.arrivalTime;
-      const depTime = Geo.formatTime(depDate);
-      const arrTime = Geo.formatTime(arrDate);
+      // 1. Time string: departure [transport icon] arrival time, e.g. "23:55 🚆 06:28"
+      // Shows when the user needs to start walking/leaving from that stop
+      const depTime = Geo.formatTime(stop.transit?.departureTime);
+      const arrTime = Geo.formatTime(stop.transit?.arrivalTime);
       const timePillText = (hasLiveSchedule && depTime && arrTime)
         ? `${depTime} ${transportIcon} ${arrTime}`
         : (isQuerying ? '...' : '--');
