@@ -11,6 +11,8 @@ export const MapManager = {
   destMarker: null,
   onLocationSelected: null,
   onMapBackgroundClick: null,
+  onSetPilotPosition: null,
+  onSetDestination: null,
   stopMarkers: {},
   flightLines: {},
   selectedStopId: null,
@@ -111,7 +113,70 @@ export const MapManager = {
       }
     });
 
+    // Map contextmenu handler (long press on mobile / right-click on desktop)
+    this.map.on('contextmenu', (e) => {
+      if (e.originalEvent) {
+        L.DomEvent.preventDefault(e.originalEvent);
+      }
+      this.showContextMenuPopup(e.latlng.lat, e.latlng.lng);
+    });
+
     return this.map;
+  },
+
+  /**
+   * Opens popup with options to set pilot position or destination
+   */
+  showContextMenuPopup(lat, lon) {
+    const content = document.createElement('div');
+    content.className = 'long-press-menu';
+    content.innerHTML = `
+      <div class="long-press-title">📍 ${lat.toFixed(4)}, ${lon.toFixed(4)}</div>
+      <div class="long-press-actions">
+        <button class="long-press-btn btn-pilot" id="lp-btn-pilot" type="button">
+          <span class="lp-icon">🪂</span>
+          <span class="lp-label">Set Pilot Position</span>
+        </button>
+        <button class="long-press-btn btn-dest" id="lp-btn-dest" type="button">
+          <span class="lp-icon">🏁</span>
+          <span class="lp-label">Set Destination</span>
+        </button>
+      </div>
+    `;
+
+    const popup = L.popup({
+      className: 'long-press-popup',
+      closeButton: true,
+      autoClose: true,
+      closeOnClick: true,
+      offset: [0, -5],
+    })
+      .setLatLng([lat, lon])
+      .setContent(content)
+      .openOn(this.map);
+
+    const btnPilot = content.querySelector('#lp-btn-pilot');
+    const btnDest = content.querySelector('#lp-btn-dest');
+
+    if (btnPilot) {
+      btnPilot.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.map.closePopup(popup);
+        if (typeof this.onSetPilotPosition === 'function') {
+          this.onSetPilotPosition(lat, lon);
+        }
+      });
+    }
+
+    if (btnDest) {
+      btnDest.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.map.closePopup(popup);
+        if (typeof this.onSetDestination === 'function') {
+          this.onSetDestination(lat, lon);
+        }
+      });
+    }
   },
 
   /**

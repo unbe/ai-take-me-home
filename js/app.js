@@ -606,6 +606,48 @@ function initEvents() {
       hideTappedStopCard();
     }
   };
+
+  // Long-press contextmenu actions: Set Pilot Position or Set Destination
+  MapManager.onSetPilotPosition = async (lat, lon) => {
+    closeInputPanel();
+    hideTappedStopCard();
+    State.pilot.lat = lat;
+    State.pilot.lon = lon;
+    try {
+      const elevs = await Elevation.getBatchElevations([{ lat, lon }]);
+      if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
+        const groundAlt = Math.round(elevs[0]);
+        if (State.pilot.altM < groundAlt) {
+          State.pilot.altM = groundAlt + 300;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not query terrain elevation for new pilot position:', e);
+    }
+    syncInputsFromState();
+    showToast(`🪂 Pilot position set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    calculateRoutes();
+  };
+
+  MapManager.onSetDestination = (lat, lon) => {
+    closeInputPanel();
+    hideTappedStopCard();
+    State.destination.lat = lat;
+    State.destination.lon = lon;
+    const matched = Object.values(PRESETS).find(
+      p => Math.abs(p.dest.lat - lat) < 0.005 && Math.abs(p.dest.lon - lon) < 0.005
+    );
+    if (matched) {
+      State.destination.name = matched.dest.name;
+      State.destination.uicRef = matched.dest.uicRef;
+    } else {
+      State.destination.name = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      State.destination.uicRef = null;
+    }
+    syncInputsFromState();
+    showToast(`🏁 Destination set to ${State.destination.name}`);
+    calculateRoutes();
+  };
 }
 
 /**
