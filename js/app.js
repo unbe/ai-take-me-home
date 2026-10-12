@@ -2,11 +2,12 @@
  * app.js - Main Application Coordinator for Take Me Home
  */
 
-import { Geo } from './geo.js?v=3.0';
-import { Overpass } from './overpass.js?v=3.0';
-import { Elevation } from './elevation.js?v=3.0';
-import { Transit } from './transit.js?v=3.0';
-import { MapManager } from './map.js?v=3.0';
+import { Geo } from './geo.js?v=3.1';
+import { Overpass } from './overpass.js?v=3.1';
+import { Elevation } from './elevation.js?v=3.1';
+import { Transit } from './transit.js?v=3.1';
+import { MapManager } from './map.js?v=3.1';
+import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
 const State = {
@@ -75,10 +76,12 @@ const UI = {
 /**
  * Toast notifications
  */
+let toastTimer = null;
 function showToast(message, durationMs = 3000) {
   UI.toast.textContent = message;
   UI.toast.classList.add('is-visible');
-  setTimeout(() => {
+  clearTimeout(toastTimer); // A newer toast must not be hidden by an older toast's timer
+  toastTimer = setTimeout(() => {
     UI.toast.classList.remove('is-visible');
   }, durationMs);
 }
@@ -232,7 +235,8 @@ async function updateDestinationAddress() {
   if (!isFinite(lat) || !isFinite(lon)) return;
   try {
     const address = await Geo.geocodeCoordinatesToAddress(lat, lon);
-    if (address) {
+    // Ignore stale results if the destination moved while the lookup was in flight
+    if (address && State.destination.lat === lat && State.destination.lon === lon) {
       State.destination.address = address;
       if (currentlyTappedStop) {
         showTappedStopCard(currentlyTappedStop, currentlyTappedRank);
@@ -353,7 +357,7 @@ function showTappedStopCard(stop, rank = 1) {
     : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   if (hasLiveSchedule) {
-    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${stop.transit?.summary || 'Transit route'}`;
+    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${escapeHtml(stop.transit?.summary || 'Transit route')}`;
   } else if (isQuerying) {
     UI.tappedLegs.textContent = '⏳ Live timetable query currently in progress...';
   } else if (!stop.transit) {
@@ -381,6 +385,10 @@ function hideTappedStopCard() {
   if (UI.tappedStopCard) {
     UI.tappedStopCard.style.display = 'none';
   }
+}
+
+function renderStops(stops, shouldFitBounds = false) {
+  MapManager.renderStops(stops, State.pilot, State.destination, showTappedStopCard, shouldFitBounds);
 }
 
 /**
@@ -536,7 +544,7 @@ async function calculateRoutes(options = {}) {
     // Sort candidate stops so reachable & marginal ones are queried FIRST
     const priority = { reachable: 0, marginal: 1, unreachable: 2 };
     stops.sort((a, b) => {
-      const pDiff = (priority[a.feasibility.status] || 2) - (priority[b.feasibility.status] || 2);
+      const pDiff = priority[a.feasibility.status] - priority[b.feasibility.status];
       if (pDiff !== 0) return pDiff;
       return a.distM - b.distM;
     });
@@ -545,9 +553,7 @@ async function calculateRoutes(options = {}) {
 
     // 4b. PROGRESSIVE RENDER 1: Display all candidate stops immediately!
     State.stops = stops;
-    MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
-      showTappedStopCard(clickedStop, rank);
-    }, true); // shouldFitBounds = true only on initial candidate render
+    renderStops(stops, true); // shouldFitBounds = true only on initial candidate render
 
     // 5. Query public transit strictly sequentially (1 request at a time)
     // Whenever a stop is shown, always also query the travel time, even if the glide ratio isn't great
@@ -561,9 +567,7 @@ async function calculateRoutes(options = {}) {
       liveQueriesCount++;
       setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
       stop.isQuerying = true;
-      MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
-        showTappedStopCard(clickedStop, rank);
-      }, false);
+      renderStops(stops);
 
       stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate, 3000, signal);
       if (signal.aborted || calcId !== currentCalculationId) return;
@@ -593,15 +597,13 @@ async function calculateRoutes(options = {}) {
           }
           return a.distM - b.distM;
         }
-        const pDiff = (priority[a.feasibility?.status] ?? 2) - (priority[b.feasibility?.status] ?? 2);
+        const pDiff = priority[a.feasibility.status] - priority[b.feasibility.status];
         if (pDiff !== 0) return pDiff;
         return a.distM - b.distM;
       });
 
       // PROGRESSIVE RENDER: Update map immediately after every stop query without resetting zoom or closing cards!
-      MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
-        showTappedStopCard(clickedStop, rank);
-      }, false);
+      renderStops(stops);
 
       // If the currently tapped stop card is visible, refresh its timetable info live!
       if (currentlyTappedStop && currentlyTappedStop.id === stop.id) {

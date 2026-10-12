@@ -42,13 +42,6 @@ export const Geo = {
   },
 
   /**
-   * Haversine distance in meters
-   */
-  haversineDistanceM(lat1, lon1, lat2, lon2) {
-    return this.haversineDistanceKm(lat1, lon1, lat2, lon2) * 1000;
-  },
-
-  /**
    * Calculates initial bearing (direction) in degrees from point 1 to point 2
    */
   bearingDegrees(lat1, lon1, lat2, lon2) {
@@ -198,106 +191,66 @@ export const Geo = {
       return this._geocodeCache.get(cacheKey);
     }
 
-    // 1. Try transport.opendata.ch (Swiss locations & street addresses)
-    try {
-      const url = `https://transport.opendata.ch/v1/locations?x=${lat.toFixed(6)}&y=${lon.toFixed(6)}`;
-      const res = await fetch(url, {
-        headers: { Accept: 'application/json' },
-        signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && Array.isArray(data.stations) && data.stations.length > 0) {
-          // Look for an address entry (id === null)
-          const addrEntry = data.stations.find((s) => s && s.id === null && s.name);
-          if (addrEntry && addrEntry.name) {
-            const addr = addrEntry.name.trim();
-            this._geocodeCache.set(cacheKey, addr);
-            return addr;
-          }
-          // If no entry with id === null, use the first location name
-          if (data.stations[0] && data.stations[0].name) {
-            const addr = data.stations[0].name.trim();
-            this._geocodeCache.set(cacheKey, addr);
-            return addr;
-          }
+    // Tries providers in order; only a caller abort propagates, other failures fall through
+    const providers = [
+      () => this._geocodeViaOpendata(lat, lon, signal),
+      () => this._geocodeViaNominatim(lat, lon, signal),
+    ];
+    for (const provider of providers) {
+      try {
+        const addr = await provider();
+        if (addr) {
+          this._geocodeCache.set(cacheKey, addr);
+          return addr;
         }
+      } catch (e) {
+        if (signal?.aborted || e.name === 'AbortError') throw e;
       }
-    } catch (e) {
-      if (signal?.aborted || e.name === 'AbortError') throw e;
-      // Fall through to Nominatim fallback
     }
-
-    // 2. Fallback to OpenStreetMap Nominatim
-    try {
-      const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&format=json`;
-      const res = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'TakeMeHome/1.0 (https://github.com/artem/take-me-home)',
-        },
-        signal,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.address) {
-          const a = data.address;
-          const street = [a.road, a.house_number].filter(Boolean).join(' ');
-          const city = a.city || a.town || a.village || a.municipality || '';
-          const postcode = a.postcode || '';
-          const parts = [];
-          if (street) parts.push(street);
-          const cityPart = [postcode, city].filter(Boolean).join(' ');
-          if (cityPart) parts.push(cityPart);
-          if (parts.length > 0) {
-            const addr = parts.join(', ');
-            this._geocodeCache.set(cacheKey, addr);
-            return addr;
-          }
-          if (data.display_name) {
-            const addr = data.display_name.trim();
-            this._geocodeCache.set(cacheKey, addr);
-            return addr;
-          }
-        }
-      }
-    } catch (e) {
-      if (signal?.aborted || e.name === 'AbortError') throw e;
-    }
-
     return '';
   },
 
-  /**
-   * Helper to clean station and town names for SBB URL search queries.
-   */
-  cleanSbbName(name) {
-    if (!name) return '';
-    const trimmed = String(name).trim();
-    // Never pass raw coordinates to SBB since SBB does not understand them
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(trimmed)) {
-      return '';
-    }
-    return trimmed;
+  async _geocodeViaOpendata(lat, lon, signal) {
+    const url = `https://transport.opendata.ch/v1/locations?x=${lat.toFixed(6)}&y=${lon.toFixed(6)}`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const stations = (data && Array.isArray(data.stations)) ? data.stations : [];
+    // Prefer an address entry (id === null), else the first location name
+    const entry = stations.find(s => s && s.id === null && s.name) || stations[0];
+    return entry && entry.name ? entry.name.trim() : '';
+  },
+
+  async _geocodeViaNominatim(lat, lon, signal) {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&format=json`;
+    const res = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'TakeMeHome/1.0 (https://github.com/artem/take-me-home)',
+      },
+      signal,
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    const a = data && data.address;
+    if (!a) return '';
+
+    const street = [a.road, a.house_number].filter(Boolean).join(' ');
+    const city = a.city || a.town || a.village || a.municipality || '';
+    const cityPart = [a.postcode, city].filter(Boolean).join(' ');
+    const addr = [street, cityPart].filter(Boolean).join(', ');
+    return addr || (data.display_name ? data.display_name.trim() : '');
   },
 
   /**
-   * Helper to build an SBB stop token (uses stop name, with optional fallback / uicRef)
+   * Returns the trimmed name, or '' if it is a raw coordinate pair (SBB does not understand those).
    */
-  buildSbbStopToken(stopOrName) {
-    if (!stopOrName) return '';
-    if (typeof stopOrName === 'object' && stopOrName.resolvedStop) {
-      stopOrName = stopOrName.resolvedStop;
-    }
-    let name = typeof stopOrName === 'object' ? (stopOrName.address || stopOrName.name || '') : String(stopOrName);
-    const uicRef = typeof stopOrName === 'object' ? (stopOrName.uicRef || stopOrName.uic_ref || null) : null;
-    let cleanName = name.trim();
-    // Never pass raw coordinates to SBB as SBB cannot understand coordinate pairs
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(cleanName)) {
-      cleanName = '';
-    }
-    if (!cleanName) return '';
-    return uicRef ? `${cleanName}_I${uicRef}` : cleanName;
+  _sbbPlace(value, keys) {
+    const raw = typeof value === 'object' && value
+      ? keys.map(k => value[k]).find(Boolean) || ''
+      : String(value || '');
+    const trimmed = raw.trim();
+    return /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(trimmed) ? '' : trimmed;
   },
 
   /**
@@ -307,20 +260,10 @@ export const Geo = {
    * Format: https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EKornhausplatz+2,+3011+Bern&time=00_24
    */
   getSbbWebUrl(from, to, departureDate) {
-    let fromName = '';
-    if (from) {
-      fromName = typeof from === 'object' ? (from.name || from.shortName || '') : String(from);
-    }
-    let toAddress = '';
-    if (to) {
-      toAddress = typeof to === 'object' ? (to.address || to.name || '') : String(to);
-    }
+    const fromName = this._sbbPlace(from, ['name', 'shortName']);
+    const toAddress = this._sbbPlace(to, ['address', 'name']);
 
-    // Strip raw coordinates if passed
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(fromName.trim())) fromName = '';
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(toAddress.trim())) toAddress = '';
-
-    const combined = toAddress.trim() ? `${fromName.trim()}~${toAddress.trim()}` : fromName.trim();
+    const combined = toAddress ? `${fromName}~${toAddress}` : fromName;
     const encodedStops = encodeURIComponent(combined)
       .replace(/%20/g, '+')
       .replace(/~/g, '%7E')
@@ -346,27 +289,9 @@ export const Geo = {
    * Format: sbbmobile://timetable?from=...&to=...
    */
   getSbbMobileUrl(from, to) {
-    let fromName = typeof from === 'object' ? (from?.name || '') : String(from || '');
-    let toAddress = typeof to === 'object' ? (to?.address || to?.name || '') : String(to || '');
-
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(fromName.trim())) fromName = '';
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(toAddress.trim())) toAddress = '';
-
-    return `sbbmobile://timetable?from=${encodeURIComponent(fromName.trim())}&to=${encodeURIComponent(toAddress.trim())}`;
-  },
-
-  /**
-   * Generate Universal SBB Mobile Web URL (https://app.sbbmobile.ch)
-   * Works on both mobile browsers and desktop, offering a 1-tap 'Open in App' button.
-   */
-  getSbbUniversalUrl(from, to) {
-    let fromName = typeof from === 'object' ? (from?.name || '') : String(from || '');
-    let toAddress = typeof to === 'object' ? (to?.address || to?.name || '') : String(to || '');
-
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(fromName.trim())) fromName = '';
-    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(toAddress.trim())) toAddress = '';
-
-    return `https://app.sbbmobile.ch/timetable?from=${encodeURIComponent(fromName.trim())}&to=${encodeURIComponent(toAddress.trim())}`;
+    const fromName = this._sbbPlace(from, ['name']);
+    const toAddress = this._sbbPlace(to, ['address', 'name']);
+    return `sbbmobile://timetable?from=${encodeURIComponent(fromName)}&to=${encodeURIComponent(toAddress)}`;
   },
 
   /**

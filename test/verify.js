@@ -6,6 +6,7 @@ import { Geo } from '../js/geo.js';
 import { Transit } from '../js/transit.js';
 import { Elevation } from '../js/elevation.js';
 import { Overpass } from '../js/overpass.js';
+import { computeTiers } from '../js/tiers.js';
 
 async function runTests() {
   console.log('=== Starting Unit & Geodesic Tests ===');
@@ -255,36 +256,10 @@ async function runTests() {
   console.log(`Test 10: Station badge transport icons (Train: ${parsedTrain.firstIcon}, S-Bahn: ${parsedSbahn.firstIcon}, Bus: ${parsedBus.firstIcon}, Cable: ${parsedCableCar.firstIcon}): PASS`);
 
   // Test 11: Smart correlated departure and arrival tier classification
+  // Uses the real tier logic from js/tiers.js
   function calculateSmartTimeTiers(currentStop, allConfirmedStops) {
-    const tierRank = { 'tier-best': 0, 'tier-good': 1, 'tier-moderate': 2, 'tier-poor': 3 };
-    const tierNames = ['tier-best', 'tier-good', 'tier-moderate', 'tier-poor'];
-
-    const minArrMs = Math.min(...allConfirmedStops.map(s => new Date(s.arr).getTime()));
-    const depMs = new Date(currentStop.dep).getTime();
-    const arrMs = new Date(currentStop.arr).getTime();
-
-    // A. Arrival tier
-    const arrDiffMin = Math.max(0, (arrMs - minArrMs) / 60000);
-    let arrClass = 'tier-poor';
-    if (arrDiffMin <= 15) arrClass = 'tier-best';
-    else if (arrDiffMin <= 35) arrClass = 'tier-good';
-    else if (arrDiffMin <= 60) arrClass = 'tier-moderate';
-
-    // B. Departure tier within similar arrival cohort (<= arrMs + 20 min)
-    const arrivalCohort = allConfirmedStops.filter(s => new Date(s.arr).getTime() <= arrMs + 20 * 60000);
-    const maxDepInCohort = Math.max(depMs, ...arrivalCohort.map(s => new Date(s.dep).getTime()));
-
-    const depDiffMin = Math.max(0, (maxDepInCohort - depMs) / 60000);
-    let rawDepClass = 'tier-poor';
-    if (depDiffMin <= 5) rawDepClass = 'tier-best';
-    else if (depDiffMin <= 10) rawDepClass = 'tier-good';
-    else if (depDiffMin <= 30) rawDepClass = 'tier-moderate';
-
-    // C. When arrival is bad/late, color departure as bad too
-    const finalDepRank = Math.max(tierRank[rawDepClass] ?? 3, tierRank[arrClass] ?? 3);
-    const depClass = tierNames[finalDepRank] || 'tier-poor';
-
-    return { depClass, arrClass };
+    const toTransit = s => ({ departureTime: s.dep, arrivalTime: s.arr });
+    return computeTiers(toTransit(currentStop), allConfirmedStops.map(toTransit));
   }
 
   const allStops = [

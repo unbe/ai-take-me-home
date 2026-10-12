@@ -2,6 +2,8 @@
  * elevation.js - Open-Meteo Elevation API client for looking up terrain elevation
  */
 
+import { throwIfAborted } from './util.js';
+
 export const Elevation = {
   ENDPOINT: 'https://api.open-meteo.com/v1/elevation',
 
@@ -13,11 +15,7 @@ export const Elevation = {
   async getBatchElevations(points, signal = null) {
     if (!points || points.length === 0) return [];
 
-    if (signal?.aborted) {
-      const err = new Error('Aborted');
-      err.name = 'AbortError';
-      throw err;
-    }
+    throwIfAborted(signal);
 
     const lats = points.map(p => p.lat.toFixed(6)).join(',');
     const lons = points.map(p => p.lon.toFixed(6)).join(',');
@@ -43,9 +41,7 @@ export const Elevation = {
 
       throw new Error('Unexpected elevation response format');
     } catch (err) {
-      if (signal?.aborted || err.name === 'AbortError') {
-        throw err;
-      }
+      throwIfAborted(signal);
       console.warn('[Elevation] Batch lookup failed, using fallback estimations:', err.message);
       // Fallback: return default estimated ground level if offline
       return points.map(() => 500);

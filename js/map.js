@@ -2,6 +2,8 @@
  * map.js - Leaflet map manager with high-visibility markers, numerical badges, and flight corridors
  */
 import { Geo } from './geo.js';
+import { computeTiers, isConfirmed, TIER_COLORS } from './tiers.js';
+import { escapeHtml } from './util.js';
 
 export const MapManager = {
   map: null,
@@ -262,7 +264,7 @@ export const MapManager = {
   clearStops() {
     this.linesLayer.clearLayers();
     this.flightLines = {};
-    for (const [id, marker] of Object.entries(this.stopMarkers)) {
+    for (const marker of Object.values(this.stopMarkers)) {
       this.markersLayer.removeLayer(marker);
     }
     this.stopMarkers = {};
@@ -291,22 +293,8 @@ export const MapManager = {
       }
     }
 
-    // Calculate earliest arrival among confirmed timetable options:
-    const confirmedStops = stops.filter(s =>
-      s.transit &&
-      s.transit.hasSchedule &&
-      s.transit.departureTime &&
-      s.transit.arrivalTime
-    );
-
-    let minArrMs = Infinity;
-    for (const s of confirmedStops) {
-      const arrT = new Date(s.transit.arrivalTime).getTime();
-      if (!isNaN(arrT) && arrT < minArrMs) minArrMs = arrT;
-    }
-
-    const tierRank = { 'tier-best': 0, 'tier-good': 1, 'tier-moderate': 2, 'tier-poor': 3 };
-    const tierNames = ['tier-best', 'tier-good', 'tier-moderate', 'tier-poor'];
+    // Confirmed timetable options (used to rank arrival/departure tiers)
+    const confirmedTransits = stops.filter(isConfirmed).map(s => s.transit);
 
     stops.forEach((stop, index) => {
       const rank = index + 1;
@@ -329,79 +317,26 @@ export const MapManager = {
       const depTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : (isQuerying ? '...' : '--');
       const arrTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : (isQuerying ? '...' : '--');
 
-      // 1. Smart Correlated Color Tiers:
-      // - Earliest arrival is best (gets pilot home quickest).
-      // - When arrival is about the same, departure is differentiated (latest departure is best).
-      // - When arrival is bad/late, departure is colored as bad too (capped by arrival tier).
+      // 1. Smart correlated color tiers (see tiers.js)
       let depClass = 'tier-none';
       let arrClass = 'tier-none';
-
       if (isQuerying) {
-        depClass = 'tier-querying';
-        arrClass = 'tier-querying';
-      } else if (hasLiveSchedule && isFinite(minArrMs)) {
-        const depMs = new Date(stop.transit.departureTime).getTime();
-        const arrMs = new Date(stop.transit.arrivalTime).getTime();
-
-        if (!isNaN(arrMs) && !isNaN(depMs)) {
-          // A. Arrival tier: Earliest arrival is best
-          const arrDiffMin = Math.max(0, (arrMs - minArrMs) / 60000);
-          if (arrDiffMin <= 15) arrClass = 'tier-best';
-          else if (arrDiffMin <= 35) arrClass = 'tier-good';
-          else if (arrDiffMin <= 60) arrClass = 'tier-moderate';
-          else arrClass = 'tier-poor';
-
-          // B. Departure tier within similar arrival cohort:
-          // Look at options arriving around the same time (within 20m of this stop's arrival)
-          const arrivalCohort = confirmedStops.filter(s => {
-            const aT = new Date(s.transit.arrivalTime).getTime();
-            return !isNaN(aT) && aT <= arrMs + 20 * 60000;
-          });
-          const maxDepInCohort = Math.max(
-            depMs,
-            ...arrivalCohort.map(s => new Date(s.transit.departureTime).getTime()).filter(t => !isNaN(t))
-          );
-
-          const depDiffMin = Math.max(0, (maxDepInCohort - depMs) / 60000);
-          let rawDepClass = 'tier-poor';
-          if (depDiffMin <= 5) rawDepClass = 'tier-best';
-          else if (depDiffMin <= 10) rawDepClass = 'tier-good';
-          else if (depDiffMin <= 30) rawDepClass = 'tier-moderate';
-
-          // C. Smart correlation: When arrival is bad/late, color departure as bad too.
-          // Departure tier cannot rank higher than arrival tier.
-          const finalDepRank = Math.max(tierRank[rawDepClass] ?? 3, tierRank[arrClass] ?? 3);
-          depClass = tierNames[finalDepRank] || 'tier-poor';
-        }
+        depClass = arrClass = 'tier-querying';
+      } else if (hasLiveSchedule) {
+        ({ depClass, arrClass } = computeTiers(stop.transit, confirmedTransits));
       }
 
       // Blended background for the mode of transport icon (gradient from departure color to arrival color)
-      const tierColors = {
-        'tier-best': '#0284c7',
-        'tier-good': '#0d9488',
-        'tier-moderate': '#d97706',
-        'tier-poor': '#dc2626',
-        'tier-querying': '#1e293b',
-        'tier-none': '#475569',
-      };
-      const depColor = tierColors[depClass] || '#475569';
-      const arrColor = tierColors[arrClass] || '#475569';
-      const iconBg = `linear-gradient(to right, ${depColor}, ${arrColor})`;
+      const iconBg = `linear-gradient(to right, ${TIER_COLORS[depClass]}, ${TIER_COLORS[arrClass]})`;
 
       // 2. Glide value & color class
       const glidePillText = stop.glideRatio !== null
         ? `${stop.glideRatio}:1`
         : (stop.isUphill ? 'UP' : '--');
 
-      let glideClass = 'glide-reachable';
-      if (stop.feasibility.status === 'reachable') {
-        glideClass = 'glide-reachable';
-      } else if (stop.feasibility.status === 'marginal') {
-        glideClass = 'glide-marginal';
-      } else {
-        glideClass = 'glide-unreachable';
-      }
+      const glideClass = `glide-${stop.feasibility.status}`;
 
+      const pillTitle = `${stop.name}: Dep ${depTime}, Arr ${arrTime}, Glide ${glidePillText}`;
       const isBest = index === 0 && hasLiveSchedule && isFinite(stop.totalTripMinutes);
       const isSelected = String(this.selectedStopId) === String(stop.id);
 
@@ -416,7 +351,7 @@ export const MapManager = {
           const pill = el.querySelector('.stop-pill-marker');
           if (pill) {
             pill.className = `stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}`;
-            pill.title = `${stop.name}: Dep ${depTime}, Arr ${arrTime}, Glide ${glidePillText}`;
+            pill.title = pillTitle;
             const depSeg = pill.querySelector('.pill-dep');
             if (depSeg) {
               depSeg.className = `pill-seg pill-dep ${depClass}`;
@@ -442,7 +377,7 @@ export const MapManager = {
       } else {
         // CREATE NEW MARKER
         const markerHtml = `
-          <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: Dep ${depTime}, Arr ${arrTime}, Glide ${glidePillText}">
+          <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${escapeHtml(pillTitle)}">
             <div class="stop-pill-capsule">
               <span class="pill-seg pill-dep ${depClass}">${depTime}</span>
               <span class="pill-seg pill-icon" style="background: ${iconBg};">${transportIcon}</span>
@@ -493,58 +428,19 @@ export const MapManager = {
       }
 
       // FLIGHT GLIDE LINE: UPDATE IN-PLACE OR CREATE
-      const lineColor = stop.feasibility.color;
       let polyline = this.flightLines[stop.id];
-      if (polyline) {
-        polyline._defaultColor = lineColor;
-        polyline._defaultWeight = rank === 1 ? 4 : 2.5;
-        polyline._defaultDashArray = isReachable ? null : '6, 6';
-        if (!this.selectedStopId) {
-          polyline.setStyle({
-            color: lineColor,
-            weight: rank === 1 ? 4 : 2.5,
-            opacity: 0.85,
-            dashArray: isReachable ? null : '6, 6',
-          });
-        } else if (isSelected) {
-          polyline.setStyle({
-            color: '#38bdf8',
-            weight: 5.5,
-            opacity: 1.0,
-            dashArray: null,
-          });
-          polyline.bringToFront();
-        } else {
-          polyline.setStyle({
-            color: lineColor,
-            weight: 1.8,
-            opacity: 0.25,
-            dashArray: isReachable ? null : '6, 6',
-          });
-        }
-      } else {
+      if (!polyline) {
         polyline = L.polyline(
           [[pilotCoord.lat, pilotCoord.lon], [stop.lat, stop.lon]],
-          {
-            color: isSelected ? '#38bdf8' : lineColor,
-            weight: isSelected ? 5.5 : (rank === 1 ? 4 : 2.5),
-            opacity: isSelected ? 1.0 : (this.selectedStopId ? 0.25 : 0.85),
-            dashArray: isReachable ? null : '6, 6',
-            interactive: false,
-          }
-        );
-        polyline._defaultColor = lineColor;
-        polyline._defaultWeight = rank === 1 ? 4 : 2.5;
-        polyline._defaultOpacity = 0.85;
-        polyline._defaultDashArray = isReachable ? null : '6, 6';
-        polyline.addTo(this.linesLayer);
-
-        if (isSelected) {
-          polyline.bringToFront();
-        }
-
+          { interactive: false }
+        ).addTo(this.linesLayer);
         this.flightLines[stop.id] = polyline;
       }
+      polyline._defaultColor = stop.feasibility.color;
+      polyline._defaultWeight = rank === 1 ? 4 : 2.5;
+      polyline._defaultOpacity = 0.85;
+      polyline._defaultDashArray = isReachable ? null : '6, 6';
+      this._applyLineStyle(polyline, isSelected);
     });
 
     if (shouldFitBounds) {
@@ -603,33 +499,31 @@ export const MapManager = {
 
     // Update flight lines
     for (const [id, line] of Object.entries(this.flightLines)) {
-      const isSelected = (String(id) === String(this.selectedStopId));
-      if (!this.selectedStopId) {
-        // Reset to original styling
-        line.setStyle({
-          color: line._defaultColor,
-          weight: line._defaultWeight,
-          opacity: line._defaultOpacity,
-          dashArray: line._defaultDashArray,
-        });
-      } else if (isSelected) {
-        // Highlight active line
-        line.setStyle({
-          color: '#38bdf8',
-          weight: 5.5,
-          opacity: 1.0,
-          dashArray: null,
-        });
-        line.bringToFront();
-      } else {
-        // Dim other lines
-        line.setStyle({
-          color: line._defaultColor,
-          weight: 1.8,
-          opacity: 0.25,
-          dashArray: line._defaultDashArray,
-        });
-      }
+      this._applyLineStyle(line, String(id) === String(this.selectedStopId));
+    }
+  },
+
+  /**
+   * Styles a flight line: default, highlighted (selected), or dimmed (another stop selected)
+   */
+  _applyLineStyle(line, isSelected) {
+    if (!this.selectedStopId) {
+      line.setStyle({
+        color: line._defaultColor,
+        weight: line._defaultWeight,
+        opacity: line._defaultOpacity,
+        dashArray: line._defaultDashArray,
+      });
+    } else if (isSelected) {
+      line.setStyle({ color: '#38bdf8', weight: 5.5, opacity: 1.0, dashArray: null });
+      line.bringToFront();
+    } else {
+      line.setStyle({
+        color: line._defaultColor,
+        weight: 1.8,
+        opacity: 0.25,
+        dashArray: line._defaultDashArray,
+      });
     }
   },
 

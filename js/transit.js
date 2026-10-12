@@ -2,6 +2,12 @@
  * transit.js - Public transit routing client using Transitous (MOTIS v2) API
  */
 import { Geo } from './geo.js';
+import { fetchWithTimeout, throwIfAborted } from './util.js';
+
+const TRAIN_MODES = new Set([
+  'RAIL', 'LONG_DISTANCE', 'REGIONAL', 'REGIONAL_RAIL', 'SUBURBAN', 'TRAIN', 'HIGH_SPEED_RAIL',
+]);
+const CABLE_MODES = new Set(['CABLE_CAR', 'FUNICULAR', 'GONDOLA', 'AERIALWAY', 'CABLEWAY']);
 
 export const Transit = {
   ENDPOINT: 'https://api.transitous.org/api/v1/plan',
@@ -16,11 +22,7 @@ export const Transit = {
    * @returns {Promise<Object>} Formatted journey summary
    */
   async planJourney(fromStop, toCoord, departureDate, maxWalkDistanceM = 3000, signal = null) {
-    if (signal?.aborted) {
-      const err = new Error('Aborted');
-      err.name = 'AbortError';
-      throw err;
-    }
+    throwIfAborted(signal);
 
     const fromPlace = `${fromStop.lat.toFixed(6)},${fromStop.lon.toFixed(6)}`;
     const toPlace = `${toCoord.lat.toFixed(6)},${toCoord.lon.toFixed(6)}`;
@@ -41,30 +43,8 @@ export const Transit = {
       headers['User-Agent'] = 'TakeMeHome-ParaglidingTransit/1.0 (https://github.com/artem/take-me-home)';
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
-
-    const onAbort = () => controller.abort();
-    if (signal) {
-      if (signal.aborted) {
-        controller.abort();
-      } else {
-        signal.addEventListener('abort', onAbort, { once: true });
-      }
-    }
-
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      if (signal) {
-        signal.removeEventListener('abort', onAbort);
-      }
-
+      const response = await fetchWithTimeout(url, { method: 'GET', headers }, 7000, signal);
       if (!response.ok) {
         throw new Error(`Transitous API returned HTTP ${response.status}`);
       }
@@ -74,13 +54,8 @@ export const Transit = {
       this._cache.set(cacheKey, result);
       return result;
     } catch (err) {
-      clearTimeout(timeoutId);
-      if (signal) {
-        signal.removeEventListener('abort', onAbort);
-      }
-      if (signal?.aborted || err.name === 'AbortError') {
-        throw err;
-      }
+      // Only a caller abort propagates; request timeouts/HTTP errors fall back to "no schedule"
+      throwIfAborted(signal);
       console.warn(`[Transit] Routing failed for stop ${fromStop.name}:`, err.message);
       return this.generateFallbackRoute(fromStop, toCoord, departureDate);
     }
@@ -114,31 +89,20 @@ export const Transit = {
       const legDurationMin = leg.duration ? Math.round(leg.duration / 60) : 0;
 
       // S-Bahn in Switzerland/Germany/Austria (e.g. S3, S5, S20, S-Bahn) is a commuter train, never a bus or tram
-      const isSbahn = /^S\s*\d+/i.test(line) || /^S-Bahn/i.test(line) || /^S\b/i.test(line);
+      const isSbahn = /^S(?:\s*\d+|\b)/i.test(line);
 
       let icon = '🚌';
       if (mode === 'WALK') {
         icon = '🚶';
-      } else if (
-        isSbahn ||
-        mode === 'RAIL' ||
-        mode === 'LONG_DISTANCE' ||
-        mode === 'REGIONAL' ||
-        mode === 'REGIONAL_RAIL' ||
-        mode === 'SUBURBAN' ||
-        mode === 'TRAIN' ||
-        mode === 'HIGH_SPEED_RAIL'
-      ) {
+      } else if (isSbahn || TRAIN_MODES.has(mode)) {
         icon = '🚆';
       } else if (mode === 'TRAM' || mode === 'LIGHT_RAIL') {
         icon = '🚊';
       } else if (mode === 'SUBWAY' || mode === 'METRO') {
-        icon = isSbahn ? '🚆' : '🚇';
-      } else if (mode === 'BUS' || mode === 'COACH') {
-        icon = isSbahn ? '🚆' : '🚌';
+        icon = '🚇';
       } else if (mode === 'FERRY' || mode === 'BOAT' || mode === 'SHIP') {
         icon = '⛴️';
-      } else if (mode === 'CABLE_CAR' || mode === 'FUNICULAR' || mode === 'GONDOLA' || mode === 'AERIALWAY' || mode === 'CABLEWAY') {
+      } else if (CABLE_MODES.has(mode)) {
         icon = '🚠';
       }
 
@@ -215,36 +179,5 @@ export const Transit = {
       summary: note,
       directDistanceKm: Math.round(transitDistKm * 10) / 10,
     };
-  },
-
-  /**
-   * Resolves coordinates to the nearest official Swiss transit station/stop
-   * Uses transport.opendata.ch API (returns official DiDok station names and UIC IDs).
-   * @param {number} lat
-   * @param {number} lon
-   * @returns {Promise<{name: string, uicRef: string|null}|null>}
-   */
-  async resolveCoordinatesToStation(lat, lon) {
-    if (!isFinite(lat) || !isFinite(lon)) return null;
-    try {
-      const url = `https://transport.opendata.ch/v1/locations?x=${lat.toFixed(6)}&y=${lon.toFixed(6)}`;
-      const response = await fetch(url, {
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!response.ok) return null;
-      const data = await response.json();
-      const stations = data && data.stations ? data.stations : [];
-      // Prefer the first station with an official UIC/DiDok ID
-      const matchWithId = stations.find(s => s && s.id);
-      if (matchWithId && matchWithId.name) {
-        return { name: matchWithId.name, uicRef: String(matchWithId.id) };
-      }
-      if (stations.length > 0 && stations[0] && stations[0].name) {
-        return { name: stations[0].name, uicRef: stations[0].id ? String(stations[0].id) : null };
-      }
-    } catch (err) {
-      console.warn('[Transit] Destination station lookup failed:', err.message);
-    }
-    return null;
   },
 };
