@@ -364,9 +364,9 @@ export const MapManager = {
 
           const depDiffMin = Math.max(0, (maxDepInCohort - depMs) / 60000);
           let rawDepClass = 'tier-poor';
-          if (depDiffMin <= 10) rawDepClass = 'tier-best';
-          else if (depDiffMin <= 25) rawDepClass = 'tier-good';
-          else if (depDiffMin <= 45) rawDepClass = 'tier-moderate';
+          if (depDiffMin <= 5) rawDepClass = 'tier-best';
+          else if (depDiffMin <= 10) rawDepClass = 'tier-good';
+          else if (depDiffMin <= 30) rawDepClass = 'tier-moderate';
 
           // C. Smart correlation: When arrival is bad/late, color departure as bad too.
           // Departure tier cannot rank higher than arrival tier.

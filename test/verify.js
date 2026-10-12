@@ -276,9 +276,9 @@ async function runTests() {
 
     const depDiffMin = Math.max(0, (maxDepInCohort - depMs) / 60000);
     let rawDepClass = 'tier-poor';
-    if (depDiffMin <= 10) rawDepClass = 'tier-best';
-    else if (depDiffMin <= 25) rawDepClass = 'tier-good';
-    else if (depDiffMin <= 45) rawDepClass = 'tier-moderate';
+    if (depDiffMin <= 5) rawDepClass = 'tier-best';
+    else if (depDiffMin <= 10) rawDepClass = 'tier-good';
+    else if (depDiffMin <= 30) rawDepClass = 'tier-moderate';
 
     // C. When arrival is bad/late, color departure as bad too
     const finalDepRank = Math.max(tierRank[rawDepClass] ?? 3, tierRank[arrClass] ?? 3);
@@ -289,21 +289,27 @@ async function runTests() {
 
   const allStops = [
     { name: 'Stop 1 (Dep 14:40, Arr 16:00)', dep: '2026-10-12T14:40:00Z', arr: '2026-10-12T16:00:00Z' },
-    { name: 'Stop 2 (Dep 14:05, Arr 16:00)', dep: '2026-10-12T14:05:00Z', arr: '2026-10-12T16:00:00Z' },
+    { name: 'Stop 2 (Dep 14:15, Arr 16:00)', dep: '2026-10-12T14:15:00Z', arr: '2026-10-12T16:00:00Z' },
     { name: 'Stop 3 (Dep 16:30, Arr 20:30)', dep: '2026-10-12T16:30:00Z', arr: '2026-10-12T20:30:00Z' },
-    { name: 'Stop 4 (Dep 14:50, Arr 16:10)', dep: '2026-10-12T14:50:00Z', arr: '2026-10-12T16:10:00Z' },
+    { name: 'Stop 4 (Dep 14:46, Arr 16:00)', dep: '2026-10-12T14:46:00Z', arr: '2026-10-12T16:00:00Z' },
   ];
 
-  // 1. Arrival about the same: Stop 1 vs Stop 2 both arrive at 16:00.
-  // Stop 1 departs at 14:40 (latest in cohort) -> depClass should be tier-best
+  // 1. Arrival about the same: Stop 1 vs Stop 2 vs Stop 4 all arrive at 16:00.
+  // Stop 4 departs at 14:46 (latest in cohort) -> depClass should be tier-best
+  const s4 = calculateSmartTimeTiers(allStops[3], allStops);
+  if (s4.depClass !== 'tier-best' || s4.arrClass !== 'tier-best') {
+    throw new Error(`Stop 4 mismatch: ${JSON.stringify(s4)}`);
+  }
+
+  // Stop 1 departs at 14:40 (6 min earlier than Stop 4 -> <= 10m) -> depClass should be tier-good
   const s1 = calculateSmartTimeTiers(allStops[0], allStops);
-  if (s1.depClass !== 'tier-best' || s1.arrClass !== 'tier-best') {
+  if (s1.depClass !== 'tier-good' || s1.arrClass !== 'tier-best') {
     throw new Error(`Stop 1 mismatch: ${JSON.stringify(s1)}`);
   }
 
-  // Stop 2 departs at 14:05 (35 min earlier) -> depClass should be differentiated to tier-moderate
+  // Stop 2 departs at 14:15 (31 min earlier than Stop 4 -> > 30m) -> depClass should be tier-poor
   const s2 = calculateSmartTimeTiers(allStops[1], allStops);
-  if (s2.depClass !== 'tier-moderate' || s2.arrClass !== 'tier-best') {
+  if (s2.depClass !== 'tier-poor' || s2.arrClass !== 'tier-best') {
     throw new Error(`Stop 2 mismatch: ${JSON.stringify(s2)}`);
   }
 
@@ -313,11 +319,6 @@ async function runTests() {
     throw new Error(`Stop 3 mismatch: ${JSON.stringify(s3)}`);
   }
 
-  // 3. Stop 4 departs even later (14:50) with great arrival (16:10) -> both tier-best
-  const s4 = calculateSmartTimeTiers(allStops[3], allStops);
-  if (s4.depClass !== 'tier-best' || s4.arrClass !== 'tier-best') {
-    throw new Error(`Stop 4 mismatch: ${JSON.stringify(s4)}`);
-  }
 
   console.log('Test 11: Smart correlated departure & arrival tiers: PASS');
 
