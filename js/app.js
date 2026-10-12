@@ -79,24 +79,6 @@ const UI = {
   coordChip: document.getElementById('coord-chip'),
   chipPilotText: document.getElementById('chip-pilot-text'),
   chipDestText: document.getElementById('chip-dest-text'),
-  bottomSheet: document.getElementById('bottom-sheet'),
-  sheetHandleBar: document.getElementById('sheet-handle-bar'),
-  btnToggleSheet: document.getElementById('btn-toggle-sheet'),
-  heroCard: document.getElementById('hero-card'),
-  heroBadge: document.getElementById('hero-badge'),
-  heroName: document.getElementById('hero-name'),
-  heroGlideVal: document.getElementById('hero-glide-val'),
-  heroGlideDrop: document.getElementById('hero-glide-drop'),
-  heroReachVal: document.getElementById('hero-reach-val'),
-  heroDistVal: document.getElementById('hero-dist-val'),
-  heroArrVal: document.getElementById('hero-arr-val'),
-  heroTotalVal: document.getElementById('hero-total-val'),
-  heroLinkGmaps: document.getElementById('hero-link-gmaps'),
-  heroLinkSbbApp: document.getElementById('hero-link-sbb-app'),
-  heroLinkSbb: document.getElementById('hero-link-sbb'),
-  stopsList: document.getElementById('stops-list'),
-  stopsEmptyMsg: document.getElementById('stops-empty-msg'),
-  resultsCountTitle: document.getElementById('results-count-title'),
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
   toast: document.getElementById('toast'),
@@ -301,22 +283,6 @@ function closeInputPanel() {
 }
 
 /**
- * Bottom Sheet Toggle (Minimize / Expand)
- */
-let isSheetExpanded = true;
-function toggleBottomSheet() {
-  isSheetExpanded = !isSheetExpanded;
-  if (isSheetExpanded) {
-    UI.bottomSheet.style.transform = 'translateY(0)';
-    UI.btnToggleSheet.textContent = 'Minimize';
-  } else {
-    // Leave just header and hero card visible
-    UI.bottomSheet.style.transform = 'translateY(calc(100% - 75px))';
-    UI.btnToggleSheet.textContent = 'Expand';
-  }
-}
-
-/**
  * Core Algorithm: Search stops, compute glide ratios, and query public transit
  */
 async function calculateRoutes() {
@@ -452,10 +418,7 @@ async function calculateRoutes() {
       // Progressive live streaming: show first result as soon as ready!
       if (i === 0) {
         const initialSorted = [...stops.slice(0, 1)];
-        MapManager.renderStops(initialSorted, pilot, destination, (clickedStop) => {
-          highlightStopCard(clickedStop);
-        });
-        renderResults(initialSorted);
+        MapManager.renderStops(initialSorted, pilot, destination);
       }
     }
 
@@ -474,160 +437,16 @@ async function calculateRoutes() {
     });
     State.stops = stops;
 
-    // 6. Update Map with custom markers showing numbers & color codes
-    MapManager.renderStops(stops, pilot, destination, (clickedStop) => {
-      highlightStopCard(clickedStop);
-    });
+    // 6. Update Map with custom markers showing color-coded time & glide
+    MapManager.renderStops(stops, pilot, destination);
 
-    // 7. Render UI (Hero Card & Ranked List)
-    renderResults(stops);
     setLoading(false);
-    showToast(`Calculated ${stops.length} options!`);
+    showToast(`Calculated ${stops.length} options! Tap any marker for details.`);
 
   } catch (err) {
     console.error('[App] Routing computation failed:', err);
     setLoading(false);
     showToast(`Error: ${err.message}`);
-  }
-}
-
-/**
- * Render Results in Bottom Sheet & Hero Card
- */
-function renderResults(stops) {
-  if (!stops || stops.length === 0) {
-    UI.heroCard.style.display = 'none';
-    UI.stopsEmptyMsg.style.display = 'block';
-    UI.resultsCountTitle.textContent = 'No Stops Found';
-    return;
-  }
-
-  UI.stopsEmptyMsg.style.display = 'none';
-  UI.resultsCountTitle.textContent = `${stops.length} Public Transport Options`;
-
-  // Render #1 Best Option into Hero Card for instant glance
-  const best = stops[0];
-  const bestHasSchedule = best.transit && best.transit.hasSchedule;
-  UI.heroCard.style.display = 'flex';
-  UI.heroBadge.className = `status-pill ${best.feasibility.badgeClass}`;
-  UI.heroBadge.textContent = `${best.feasibility.label} (${best.glideRatio !== null ? `${best.glideRatio}:1` : 'N/A'})`;
-  UI.heroName.innerHTML = `${best.icon} ${best.name}`;
-  UI.heroGlideVal.textContent = best.glideRatio !== null ? `${best.glideRatio}:1` : 'N/A';
-  UI.heroGlideDrop.textContent = `${best.altDropM >= 0 ? `-${best.altDropM}m drop` : `+${Math.abs(best.altDropM)}m uphill`}`;
-  UI.heroReachVal.textContent = Geo.formatDurationMinutes(best.reachTimeMinutes);
-  UI.heroDistVal.textContent = Geo.formatDistance(best.distKm);
-  UI.heroArrVal.textContent = bestHasSchedule ? Geo.formatTime(best.transit?.arrivalTime) : 'No service';
-  UI.heroTotalVal.textContent = bestHasSchedule && isFinite(best.totalTripMinutes)
-    ? `${Geo.formatDurationMinutes(best.totalTripMinutes)} total`
-    : '--';
-
-  const destNameOrCoords = State.destination.name || `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
-  const bestGmapsUrl = Geo.getGoogleMapsUrl(best.lat, best.lon, State.destination.lat, State.destination.lon);
-  const bestSbbWebUrl = Geo.getSbbWebUrl(best, State.destination, best.transit?.departureTime || best.targetDepartureDate);
-  const bestSbbAppUrl = Geo.getSbbMobileUrl(best.name, destNameOrCoords);
-
-  if (UI.heroLinkGmaps) {
-    UI.heroLinkGmaps.href = bestGmapsUrl;
-    UI.heroLinkGmaps.onclick = (e) => e.stopPropagation();
-  }
-  if (UI.heroLinkSbbApp) {
-    UI.heroLinkSbbApp.href = bestSbbAppUrl;
-    UI.heroLinkSbbApp.onclick = (e) => e.stopPropagation();
-  }
-  if (UI.heroLinkSbb) {
-    UI.heroLinkSbb.href = bestSbbWebUrl;
-    UI.heroLinkSbb.onclick = (e) => e.stopPropagation();
-  }
-
-  UI.heroCard.onclick = () => {
-    MapManager.focusStop(best.lat, best.lon);
-    highlightStopCard(best);
-  };
-
-  // Render all ranked cards
-  UI.stopsList.innerHTML = '';
-  stops.forEach((stop, index) => {
-    const rank = index + 1;
-    const card = document.createElement('div');
-    card.className = `stop-card ${rank === 1 ? 'is-active' : ''}`;
-    card.id = `stop-card-${stop.id}`;
-
-    const hasSchedule = stop.transit && stop.transit.hasSchedule;
-    const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : 'N/A';
-    const distText = Geo.formatDistance(stop.distKm);
-    const reachText = Geo.formatDurationMinutes(stop.reachTimeMinutes);
-    const transitText = hasSchedule ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes) : 'No timetable';
-    const totalText = hasSchedule && isFinite(stop.totalTripMinutes) ? Geo.formatDurationMinutes(stop.totalTripMinutes) : '--';
-    const depTimeText = hasSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
-    const arrTimeText = hasSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : 'No service';
-
-    const gmapsUrl = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
-    const sbbWebUrl = Geo.getSbbWebUrl(stop, State.destination, stop.transit?.departureTime || stop.targetDepartureDate);
-    const sbbAppUrl = Geo.getSbbMobileUrl(stop.name, destNameOrCoords);
-
-    card.innerHTML = `
-      <div class="stop-card-top">
-        <div class="stop-card-title">
-          <span class="stop-card-rank">#${rank}</span>
-          <span>${stop.icon} ${stop.name}</span>
-        </div>
-        <div class="status-pill ${stop.feasibility.badgeClass}">
-          ${stop.feasibility.label}
-        </div>
-      </div>
-
-      <div class="stop-card-stats">
-        <div class="stat-item">
-          <span class="stat-lbl">Glide Ratio</span>
-          <span class="stat-num" style="color: ${stop.feasibility.color}">${glideNum}</span>
-          <small style="color: var(--text-muted)">drop: ${stop.altDropM}m</small>
-        </div>
-        <div class="stat-item">
-          <span class="stat-lbl">Reach Stop</span>
-          <span class="stat-num">${reachText}</span>
-          <small style="color: var(--text-muted)">${distText} @ 30km/h</small>
-        </div>
-        <div class="stat-item">
-          <span class="stat-lbl">Transit & Arr</span>
-          <span class="stat-num">🏁 ${arrTimeText}</span>
-          <small style="color: var(--text-muted)">${transitText} (${totalText} tot)</small>
-        </div>
-      </div>
-
-      <div class="stop-card-route-summary">
-        ${hasSchedule
-          ? `<span>🕒 <strong>${depTimeText} ➔ ${arrTimeText}</strong> • ${stop.transit?.summary || 'Transit Route'}${stop.transit?.waitAtStopMinutes >= 60 ? ` • <strong style="color: var(--accent-amber)">(${Geo.formatDurationMinutes(stop.transit.waitAtStopMinutes)} wait at stop)</strong>` : ''}</span>`
-          : `<span style="color: var(--text-muted)">⚠️ ${stop.transit?.summary || 'No scheduled transit found'}</span>`}
-      </div>
-
-      <div class="card-links-row">
-        <a class="card-link-btn gmaps" href="${gmapsUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
-          <span>🗺️ Google Maps</span>
-        </a>
-        <a class="card-link-btn sbb-app" href="${sbbAppUrl}" onclick="event.stopPropagation()">
-          <span>📱 SBB App</span>
-        </a>
-        <a class="card-link-btn sbb" href="${sbbWebUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
-          <span>🚆 SBB Web</span>
-        </a>
-      </div>
-    `;
-
-    card.addEventListener('click', () => {
-      MapManager.focusStop(stop.lat, stop.lon);
-      highlightStopCard(stop);
-    });
-
-    UI.stopsList.appendChild(card);
-  });
-}
-
-function highlightStopCard(stop) {
-  document.querySelectorAll('.stop-card').forEach(el => el.classList.remove('is-active'));
-  const card = document.getElementById(`stop-card-${stop.id}`);
-  if (card) {
-    card.classList.add('is-active');
-    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
 
@@ -642,8 +461,6 @@ function initEvents() {
   UI.fabRecalc.addEventListener('click', calculateRoutes);
   UI.btnGps.addEventListener('click', useCurrentLocation);
   UI.btnPilotGps.addEventListener('click', useCurrentLocation);
-  UI.btnToggleSheet.addEventListener('click', toggleBottomSheet);
-  UI.sheetHandleBar.addEventListener('click', toggleBottomSheet);
 
   // Preset chips
   document.querySelectorAll('.preset-chip').forEach(btn => {

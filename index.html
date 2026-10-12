@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=4.0" />
+  <link rel="stylesheet" href="css/styles.css?v=4.1" />
 </head>
 <body>
   <div class="app-container">
@@ -152,62 +152,6 @@
       </button>
     </section>
 
-    <!-- BOTTOM SHEET / DRAWER (Mobile First) -->
-    <aside id="bottom-sheet" class="bottom-sheet" aria-label="Results drawer">
-      <div id="sheet-handle-bar" class="sheet-handle-bar">
-        <div class="sheet-handle"></div>
-      </div>
-
-      <div class="sheet-header-summary">
-        <span id="results-count-title" class="sheet-summary-title">Public Transport Options</span>
-        <button id="btn-toggle-sheet" class="sheet-toggle-btn">Minimize</button>
-      </div>
-
-      <!-- HERO / QUICK GLANCE CARD (#1 BEST OPTION) -->
-      <div id="hero-card" class="hero-card" style="display: none;">
-        <div class="hero-header">
-          <span class="hero-rank-tag">🏆 Best Route</span>
-          <div id="hero-badge" class="status-pill badge-reachable">🟢 Reachable (6.2:1)</div>
-        </div>
-        <div id="hero-name" class="hero-name">🚆 Interlaken Ost</div>
-        <div class="hero-metrics-grid">
-          <div class="hero-metric-box">
-            <span class="hero-metric-label">Glide Ratio</span>
-            <span id="hero-glide-val" class="hero-metric-val">6.2:1</span>
-            <span id="hero-glide-drop" class="hero-metric-sub">-1035m drop</span>
-          </div>
-          <div class="hero-metric-box">
-            <span class="hero-metric-label">To Stop</span>
-            <span id="hero-reach-val" class="hero-metric-val">41m</span>
-            <span id="hero-dist-val" class="hero-metric-sub">5.4 km</span>
-          </div>
-          <div class="hero-metric-box">
-            <span class="hero-metric-label">Arrival</span>
-            <span id="hero-arr-val" class="hero-metric-val">17:15</span>
-            <span id="hero-total-val" class="hero-metric-sub">1h 14m total</span>
-          </div>
-        </div>
-        <div class="card-links-row">
-          <a id="hero-link-gmaps" class="card-link-btn gmaps" href="#" target="_blank" rel="noopener">
-            <span>🗺️ Google Maps</span>
-          </a>
-          <a id="hero-link-sbb-app" class="card-link-btn sbb-app" href="#">
-            <span>📱 SBB App</span>
-          </a>
-          <a id="hero-link-sbb" class="card-link-btn sbb" href="#" target="_blank" rel="noopener">
-            <span>🚆 SBB Web</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- SCROLLABLE STOPS LIST -->
-      <div id="stops-list" class="stops-list">
-        <p id="stops-empty-msg" style="text-align: center; color: var(--text-secondary); padding: 20px 0;">
-          Tap <strong>⚡ Calculate</strong> or select a preset above to discover nearby stops.
-        </p>
-      </div>
-    </aside>
-
     <!-- LOADING OVERLAY -->
     <div id="loading-overlay" class="loading-overlay">
       <div class="spinner"></div>
@@ -225,6 +169,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=4.0"></script>
+  <script type="module" src="js/app.js?v=4.1"></script>
 </body>
 </html>
