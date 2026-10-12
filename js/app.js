@@ -316,12 +316,14 @@ function showTappedStopCard(stop, rank = 1) {
 
   const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
     ? Geo.formatDurationMinutes(stop.totalTripMinutes)
-    : (isQuerying ? 'Fetching...' : '--');
+    : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : '--'));
 
   const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : (stop.isUphill ? 'UP' : 'N/A');
   const dropText = stop.altDropM >= 0 ? `-${stop.altDropM}m drop` : `+${Math.abs(stop.altDropM)}m uphill`;
   const depText = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
-  const arrText = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : (isQuerying ? 'Querying...' : 'No service');
+  const arrText = hasLiveSchedule
+    ? Geo.formatTime(stop.transit?.arrivalTime)
+    : (isQuerying ? 'Querying...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   UI.tappedRank.textContent = `#${rank}`;
   UI.tappedName.textContent = `${stop.icon || '🚏'} ${stop.name}`;
@@ -336,12 +338,16 @@ function showTappedStopCard(stop, rank = 1) {
   UI.tappedDist.textContent = Geo.formatDistance(stop.distKm);
 
   UI.tappedTotal.textContent = totalTimeText;
-  UI.tappedArr.textContent = hasLiveSchedule ? `Arr ${arrText}` : (isQuerying ? 'Fetching...' : 'No service');
+  UI.tappedArr.textContent = hasLiveSchedule
+    ? `Arr ${arrText}`
+    : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   if (hasLiveSchedule) {
     UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${stop.transit?.summary || 'Transit route'}`;
   } else if (isQuerying) {
     UI.tappedLegs.textContent = '⏳ Live timetable query currently in progress...';
+  } else if (!stop.transit) {
+    UI.tappedLegs.textContent = '⏳ Timetable query queued...';
   } else {
     UI.tappedLegs.textContent = `⚠️ ${stop.transit?.summary || 'No scheduled transit route found'}`;
   }
@@ -368,6 +374,7 @@ function hideTappedStopCard() {
  */
 async function calculateRoutes() {
   if (State.isCalculating) return;
+  State.isCalculating = true;
 
   syncStateFromInputs();
   closeInputPanel();
@@ -471,35 +478,21 @@ async function calculateRoutes() {
     }, true); // shouldFitBounds = true only on initial candidate render
 
     // 5. Query public transit strictly sequentially (1 request at a time)
-    // Query live timetable API for candidate stops that are feasible for flight
-    const maxLiveQueries = settings.stopsCount || 15;
-    const viableStops = stops.filter(s => s.feasibility.status === 'reachable' || s.feasibility.status === 'marginal');
-    const totalToQuery = Math.min(viableStops.length, maxLiveQueries);
+    // Whenever a stop is shown, always also query the travel time, even if the glide ratio isn't great
+    const totalToQuery = stops.length;
     let liveQueriesCount = 0;
 
     for (let i = 0; i < stops.length; i++) {
       const stop = stops[i];
-      const isViableForFlight = stop.feasibility.status === 'reachable' || stop.feasibility.status === 'marginal';
+      liveQueriesCount++;
+      setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
+      stop.isQuerying = true;
+      MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
+        showTappedStopCard(clickedStop, rank);
+      }, false);
 
-      if (isViableForFlight && liveQueriesCount < maxLiveQueries) {
-        liveQueriesCount++;
-        setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
-        stop.isQuerying = true;
-        MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
-          showTappedStopCard(clickedStop, rank);
-        }, false);
-
-        stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
-        stop.isQuerying = false;
-      } else {
-        // Stop without live query or unreachable
-        stop.transit = Transit.generateFallbackRoute(
-          stop,
-          destination,
-          stop.targetDepartureDate,
-          isViableForFlight ? 'No live timetable queried' : 'Unreachable by glide'
-        );
-      }
+      stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
+      stop.isQuerying = false;
 
       // Total journey time from now to final destination arrival
       if (stop.transit && stop.transit.hasSchedule) {
@@ -529,7 +522,7 @@ async function calculateRoutes() {
         return a.distM - b.distM;
       });
 
-      // PROGRESSIVE RENDER: Update map immediately after every stop query without resetting zoom or closing popups!
+      // PROGRESSIVE RENDER: Update map immediately after every stop query without resetting zoom or closing cards!
       MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
         showTappedStopCard(clickedStop, rank);
       }, false);
@@ -551,6 +544,8 @@ async function calculateRoutes() {
     console.error('[App] Routing computation failed:', err);
     setLoading(false);
     showToast(`Error: ${err.message}`);
+  } finally {
+    State.isCalculating = false;
   }
 }
 
