@@ -57,46 +57,37 @@ async function runTests() {
   if (Geo.formatDurationMinutes(45) !== '45m' || Geo.formatDurationMinutes(75) !== '1h 15m') {
     throw new Error('Duration formatting failed');
   }
-  // Test 6: SBB URL generation
-  const webUrlWithDidok = Geo.getSbbWebUrl(
-    { name: 'Oberiberg, Wandli', uicRef: '8577501' },
-    { name: 'Bern', uicRef: '8507000' },
+  // Test 6: SBB URL generation (Stop name as source, geocoded address as destination)
+  const webUrlWithAddress = Geo.getSbbWebUrl(
+    { name: 'Oberiberg, Wandli' },
+    { address: 'Kornhausplatz 2, 3011 Bern' },
     new Date('2026-10-12T00:24:00')
   );
-  const webUrlFallback = Geo.getSbbWebUrl('Oberiberg, Wandli', 'Bern', new Date('2026-10-12T00:24:00'));
-  const mobileUrl = Geo.getSbbMobileUrl('Oberiberg, Wandli', 'Bern');
-  console.log('Test 6a: SBB Web URL (with DiDok):', webUrlWithDidok);
-  console.log('Test 6b: SBB Web URL (fallback):', webUrlFallback);
+  const webUrlStrings = Geo.getSbbWebUrl('Oberiberg, Wandli', 'Kornhausplatz 2, 3011 Bern', new Date('2026-10-12T00:24:00'));
+  const mobileUrl = Geo.getSbbMobileUrl('Oberiberg, Wandli', 'Kornhausplatz 2, 3011 Bern');
+  console.log('Test 6a: SBB Web URL (with object):', webUrlWithAddress);
+  console.log('Test 6b: SBB Web URL (with strings):', webUrlStrings);
   console.log('Test 6c: SBB Mobile URL:', mobileUrl);
 
-  const expectedDidokUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7EBern_I8507000&time=00_24';
-  if (webUrlWithDidok !== expectedDidokUrl) {
-    throw new Error(`SBB Web URL mismatch:\nExpected: ${expectedDidokUrl}\nGot:      ${webUrlWithDidok}`);
+  const expectedAddressUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EKornhausplatz+2,+3011+Bern&time=00_24';
+  if (webUrlWithAddress !== expectedAddressUrl) {
+    throw new Error(`SBB Web URL mismatch:\nExpected: ${expectedAddressUrl}\nGot:      ${webUrlWithAddress}`);
   }
-  if (webUrlFallback !== 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EBern&time=00_24') {
-    throw new Error(`SBB Web fallback mismatch: ${webUrlFallback}`);
+  if (webUrlStrings !== expectedAddressUrl) {
+    throw new Error(`SBB Web strings mismatch: ${webUrlStrings}`);
   }
-  if (mobileUrl !== 'sbbmobile://timetable?from=Oberiberg%20Wandli&to=Bern') {
-    throw new Error(`SBB Mobile URL mismatch: ${mobileUrl}`);
-  }
-  const webUrlResolved = Geo.getSbbWebUrl(
-    { name: 'Oberiberg, Wandli', uicRef: '8577501' },
-    { resolvedStop: { name: 'Steinhausen, Rigiweg', uicRef: '8595087' } },
-    new Date('2026-10-12T00:24:00')
-  );
-  console.log('Test 6d: SBB Web URL (with resolved destination stop):', webUrlResolved);
-  const expectedResolvedUrl = 'https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7ESteinhausen,+Rigiweg_I8595087&time=00_24';
-  if (webUrlResolved !== expectedResolvedUrl) {
-    throw new Error(`SBB Web resolved mismatch:\nExpected: ${expectedResolvedUrl}\nGot:      ${webUrlResolved}`);
+  const expectedMobileUrl = 'sbbmobile://timetable?from=Oberiberg%2C%20Wandli&to=Kornhausplatz%202%2C%203011%20Bern';
+  if (mobileUrl !== expectedMobileUrl) {
+    throw new Error(`SBB Mobile URL mismatch:\nExpected: ${expectedMobileUrl}\nGot:      ${mobileUrl}`);
   }
 
   // Ensure raw coordinates are never passed to SBB Web
   const webUrlRawCoords = Geo.getSbbWebUrl(
-    { name: 'Oberiberg, Wandli', uicRef: '8577501' },
-    { lat: 47.1234, lon: 8.5678 },
+    { name: 'Oberiberg, Wandli' },
+    '47.1234, 8.5678',
     new Date('2026-10-12T00:24:00')
   );
-  if (webUrlRawCoords.includes('47.1234')) {
+  if (webUrlRawCoords.includes('47.1234') || webUrlRawCoords.includes('8.5678')) {
     throw new Error('Raw coordinates should never be embedded in SBB Web URL');
   }
   console.log('Test 6: SBB link generation: PASS');
@@ -176,13 +167,13 @@ async function runTests() {
   }
   console.log('Test 8: Immediate query abortion support: PASS');
 
-  // Test 9: Destination station resolution for SBB
-  const resolvedBern = await Transit.resolveCoordinatesToStation(46.9480, 7.4474);
-  console.log('Test 9: Resolved Bern coordinates to:', resolvedBern);
-  if (!resolvedBern || !resolvedBern.name || !resolvedBern.uicRef) {
-    throw new Error('Destination station resolution failed for Bern');
+  // Test 9: Destination coordinates geocoding into an address for SBB
+  const addressBern = await Geo.geocodeCoordinatesToAddress(46.9480, 7.4474);
+  console.log('Test 9: Geocoded Bern coordinates to address:', addressBern);
+  if (!addressBern || !addressBern.toLowerCase().includes('bern')) {
+    throw new Error(`Destination address geocoding failed for Bern: ${addressBern}`);
   }
-  console.log('Test 9: Destination station resolution for SBB: PASS');
+  console.log('Test 9: Destination coordinates geocoding into address for SBB: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }

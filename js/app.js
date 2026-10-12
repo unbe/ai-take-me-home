@@ -18,7 +18,7 @@ const State = {
   destination: {
     lat: 46.9480,
     lon: 7.4474,
-    resolvedStop: null,
+    address: null,
   },
   settings: {
     stopsCount: 15,
@@ -225,14 +225,21 @@ function syncStateFromInputs() {
 }
 
 /**
- * Resolves destination coordinates to the nearest official Swiss station for SBB links
+ * Geocodes destination coordinates into a street/postal address for SBB journey planning
  */
-async function updateDestinationResolution() {
+async function updateDestinationAddress() {
   const { lat, lon } = State.destination;
   if (!isFinite(lat) || !isFinite(lon)) return;
-  const resolved = await Transit.resolveCoordinatesToStation(lat, lon);
-  if (resolved) {
-    State.destination.resolvedStop = resolved;
+  try {
+    const address = await Geo.geocodeCoordinatesToAddress(lat, lon);
+    if (address) {
+      State.destination.address = address;
+      if (currentlyTappedStop) {
+        showTappedStopCard(currentlyTappedStop, currentlyTappedRank);
+      }
+    }
+  } catch (err) {
+    console.warn('[App] Destination address geocoding failed:', err);
   }
 }
 
@@ -359,24 +366,11 @@ function showTappedStopCard(stop, rank = 1) {
   // Google Maps accepts coordinates natively
   UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
 
-  // SBB requires a station name (does not understand coordinates)
-  let sbbDest = null;
-  if (stop.transit && stop.transit.destinationStopName) {
-    sbbDest = {
-      name: stop.transit.destinationStopName,
-      uicRef: State.destination.resolvedStop?.uicRef || null,
-    };
-  } else if (State.destination.resolvedStop) {
-    sbbDest = State.destination.resolvedStop;
-  }
-
-  if (sbbDest && sbbDest.name) {
-    UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, sbbDest.name);
-    UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, sbbDest, stop.transit?.departureTime || stop.targetDepartureDate);
-  } else {
-    UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, '');
-    UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, null, stop.transit?.departureTime || stop.targetDepartureDate);
-  }
+  // SBB links: source is the stop name, destination is the geocoded address
+  const destAddress = State.destination.address || '';
+  const depTime = stop.transit?.departureTime || stop.targetDepartureDate;
+  UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, destAddress);
+  UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop.name, destAddress, depTime);
 
   UI.tappedStopCard.style.display = 'flex';
 }
@@ -429,8 +423,8 @@ async function calculateRoutes(options = {}) {
   MapManager.centerOnPilot(pilot.lat, pilot.lon);
   MapManager.clearStops();
 
-  if (!destination.resolvedStop) {
-    updateDestinationResolution();
+  if (!destination.address) {
+    updateDestinationAddress();
   }
 
   try {
@@ -686,8 +680,8 @@ function initEvents() {
     hideTappedStopCard();
     State.destination.lat = lat;
     State.destination.lon = lon;
-    State.destination.resolvedStop = null;
-    updateDestinationResolution();
+    State.destination.address = null;
+    updateDestinationAddress();
     syncInputsFromState();
     updateUrlFromState();
     showToast(`🏁 Destination set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
@@ -698,7 +692,8 @@ function initEvents() {
   window.addEventListener('popstate', () => {
     parseStateFromUrl();
     syncInputsFromState();
-    updateDestinationResolution();
+    State.destination.address = null;
+    updateDestinationAddress();
     calculateRoutes();
   });
 }
@@ -712,7 +707,7 @@ async function init() {
   const { pilotSetInUrl } = parseStateFromUrl();
   syncInputsFromState();
   updateUrlFromState();
-  updateDestinationResolution();
+  updateDestinationAddress();
 
   // Center map around pilot position FIRST
   MapManager.init('map', State.pilot.lat, State.pilot.lon, 13);

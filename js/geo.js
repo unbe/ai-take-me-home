@@ -180,11 +180,96 @@ export const Geo = {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   },
 
+  _geocodeCache: new Map(),
+
+  /**
+   * Reverse-geocodes coordinates into a street/postal address for SBB journey planning.
+   * Primary provider: Swiss transport.opendata.ch (returns precise Swiss street addresses).
+   * Fallback provider: OpenStreetMap Nominatim (for general/international coordinates).
+   * @param {number} lat
+   * @param {number} lon
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<string>}
+   */
+  async geocodeCoordinatesToAddress(lat, lon, signal = null) {
+    if (!isFinite(lat) || !isFinite(lon)) return '';
+    const cacheKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+    if (this._geocodeCache.has(cacheKey)) {
+      return this._geocodeCache.get(cacheKey);
+    }
+
+    // 1. Try transport.opendata.ch (Swiss locations & street addresses)
+    try {
+      const url = `https://transport.opendata.ch/v1/locations?x=${lat.toFixed(6)}&y=${lon.toFixed(6)}`;
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.stations) && data.stations.length > 0) {
+          // Look for an address entry (id === null)
+          const addrEntry = data.stations.find((s) => s && s.id === null && s.name);
+          if (addrEntry && addrEntry.name) {
+            const addr = addrEntry.name.trim();
+            this._geocodeCache.set(cacheKey, addr);
+            return addr;
+          }
+          // If no entry with id === null, use the first location name
+          if (data.stations[0] && data.stations[0].name) {
+            const addr = data.stations[0].name.trim();
+            this._geocodeCache.set(cacheKey, addr);
+            return addr;
+          }
+        }
+      }
+    } catch (e) {
+      if (signal?.aborted || e.name === 'AbortError') throw e;
+      // Fall through to Nominatim fallback
+    }
+
+    // 2. Fallback to OpenStreetMap Nominatim
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}&format=json`;
+      const res = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'TakeMeHome/1.0 (https://github.com/artem/take-me-home)',
+        },
+        signal,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.address) {
+          const a = data.address;
+          const street = [a.road, a.house_number].filter(Boolean).join(' ');
+          const city = a.city || a.town || a.village || a.municipality || '';
+          const postcode = a.postcode || '';
+          const parts = [];
+          if (street) parts.push(street);
+          const cityPart = [postcode, city].filter(Boolean).join(' ');
+          if (cityPart) parts.push(cityPart);
+          if (parts.length > 0) {
+            const addr = parts.join(', ');
+            this._geocodeCache.set(cacheKey, addr);
+            return addr;
+          }
+          if (data.display_name) {
+            const addr = data.display_name.trim();
+            this._geocodeCache.set(cacheKey, addr);
+            return addr;
+          }
+        }
+      }
+    } catch (e) {
+      if (signal?.aborted || e.name === 'AbortError') throw e;
+    }
+
+    return '';
+  },
+
   /**
    * Helper to clean station and town names for SBB URL search queries.
-   * On SBB, commas (e.g. "Oberiberg, Wandli") often confuse the query parser
-   * into looking for an address (Town, Street) rather than a transit stop.
-   * Stripping the comma ("Oberiberg Wandli") reliably resolves the station.
    */
   cleanSbbName(name) {
     if (!name) return '';
@@ -193,18 +278,18 @@ export const Geo = {
     if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(trimmed)) {
       return '';
     }
-    return trimmed.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+    return trimmed;
   },
 
   /**
-   * Helper to build an SBB stop token with optional UIC/DiDok ID (e.g. "Oberiberg, Wandli_I8577501" or "Bern_I8507000")
+   * Helper to build an SBB stop token (uses stop name, with optional fallback / uicRef)
    */
   buildSbbStopToken(stopOrName) {
     if (!stopOrName) return '';
     if (typeof stopOrName === 'object' && stopOrName.resolvedStop) {
       stopOrName = stopOrName.resolvedStop;
     }
-    let name = typeof stopOrName === 'object' ? (stopOrName.name || '') : String(stopOrName);
+    let name = typeof stopOrName === 'object' ? (stopOrName.address || stopOrName.name || '') : String(stopOrName);
     const uicRef = typeof stopOrName === 'object' ? (stopOrName.uicRef || stopOrName.uic_ref || null) : null;
     let cleanName = name.trim();
     // Never pass raw coordinates to SBB as SBB cannot understand coordinate pairs
@@ -217,13 +302,25 @@ export const Geo = {
 
   /**
    * Generate SBB Web Timetable URL
-   * Modern SBB URL format with DiDok station IDs and departure time:
-   * Format: https://www.sbb.ch/en?stops=Oberiberg,+Wandli_I8577501%7EBern_I8507000&time=00_24
+   * Source: stop name (e.g. "Oberiberg, Wandli")
+   * Destination: geocoded street address (e.g. "Kornhausplatz 2, 3011 Bern")
+   * Format: https://www.sbb.ch/en?stops=Oberiberg,+Wandli%7EKornhausplatz+2,+3011+Bern&time=00_24
    */
   getSbbWebUrl(from, to, departureDate) {
-    const fromToken = this.buildSbbStopToken(from);
-    const toToken = this.buildSbbStopToken(to);
-    const combined = toToken ? `${fromToken}~${toToken}` : fromToken;
+    let fromName = '';
+    if (from) {
+      fromName = typeof from === 'object' ? (from.name || from.shortName || '') : String(from);
+    }
+    let toAddress = '';
+    if (to) {
+      toAddress = typeof to === 'object' ? (to.address || to.name || '') : String(to);
+    }
+
+    // Strip raw coordinates if passed
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(fromName.trim())) fromName = '';
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(toAddress.trim())) toAddress = '';
+
+    const combined = toAddress.trim() ? `${fromName.trim()}~${toAddress.trim()}` : fromName.trim();
     const encodedStops = encodeURIComponent(combined)
       .replace(/%20/g, '+')
       .replace(/~/g, '%7E')
@@ -242,22 +339,31 @@ export const Geo = {
 
   /**
    * Generate SBB Mobile App Deep Link (for native iOS / Android SBB Mobile app)
+   * Source: stop name, Destination: geocoded address
    * Format: sbbmobile://timetable?from=...&to=...
    */
-  getSbbMobileUrl(fromName, toName) {
-    const cleanFrom = this.cleanSbbName(fromName);
-    const cleanTo = this.cleanSbbName(toName);
-    return `sbbmobile://timetable?from=${encodeURIComponent(cleanFrom)}&to=${encodeURIComponent(cleanTo)}`;
+  getSbbMobileUrl(from, to) {
+    let fromName = typeof from === 'object' ? (from?.name || '') : String(from || '');
+    let toAddress = typeof to === 'object' ? (to?.address || to?.name || '') : String(to || '');
+
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(fromName.trim())) fromName = '';
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(toAddress.trim())) toAddress = '';
+
+    return `sbbmobile://timetable?from=${encodeURIComponent(fromName.trim())}&to=${encodeURIComponent(toAddress.trim())}`;
   },
 
   /**
    * Generate Universal SBB Mobile Web URL (https://app.sbbmobile.ch)
    * Works on both mobile browsers and desktop, offering a 1-tap 'Open in App' button.
    */
-  getSbbUniversalUrl(fromName, toName) {
-    const cleanFrom = this.cleanSbbName(fromName);
-    const cleanTo = this.cleanSbbName(toName);
-    return `https://app.sbbmobile.ch/timetable?from=${encodeURIComponent(cleanFrom)}&to=${encodeURIComponent(cleanTo)}`;
+  getSbbUniversalUrl(from, to) {
+    let fromName = typeof from === 'object' ? (from?.name || '') : String(from || '');
+    let toAddress = typeof to === 'object' ? (to?.address || to?.name || '') : String(to || '');
+
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(fromName.trim())) fromName = '';
+    if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(toAddress.trim())) toAddress = '';
+
+    return `https://app.sbbmobile.ch/timetable?from=${encodeURIComponent(fromName.trim())}&to=${encodeURIComponent(toAddress.trim())}`;
   },
 
   /**
