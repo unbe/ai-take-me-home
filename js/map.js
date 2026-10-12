@@ -192,78 +192,70 @@ export const MapManager = {
       const isMarginal = stop.feasibility.status === 'marginal';
       
       const badgeColorClass = stop.feasibility.badgeClass;
-      const glideText = stop.glideRatio !== null ? `${stop.glideRatio}:1` : 'N/A';
+      // 1. Time value & color class
       const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
-      const transitText = hasLiveSchedule ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes) : 'No timetable';
       const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
         ? Geo.formatDurationMinutes(stop.totalTripMinutes)
         : '--';
 
-      // Departure and Arrival times
-      const depTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
-      const arrTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : 'No service';
-
-      // Speed color-coding relative to the best option
       const tripMin = (hasLiveSchedule && isFinite(stop.totalTripMinutes)) ? stop.totalTripMinutes : Infinity;
       const timeDiff = (isFinite(tripMin) && isFinite(minTripMin)) ? tripMin - minTripMin : Infinity;
-      let speedClass = 'speed-fastest';
-      let speedBadgeText = '⚡ FASTEST';
 
-      if (!hasLiveSchedule) {
-        speedClass = 'speed-slow';
-        speedBadgeText = 'NO TIMETABLE';
+      let timeClass = 'time-fastest';
+      if (!hasLiveSchedule || !isFinite(stop.totalTripMinutes)) {
+        timeClass = 'time-none';
       } else if (index === 0 || timeDiff <= 10) {
-        speedClass = 'speed-fastest';
-        speedBadgeText = '⚡ FASTEST';
+        timeClass = 'time-fastest';
       } else if (timeDiff <= 30) {
-        speedClass = 'speed-fast';
-        speedBadgeText = `+${timeDiff}m`;
+        timeClass = 'time-fast';
       } else if (timeDiff <= 60) {
-        speedClass = 'speed-moderate';
-        speedBadgeText = `+${timeDiff}m`;
+        timeClass = 'time-moderate';
       } else {
-        speedClass = 'speed-slow';
-        speedBadgeText = `+${Geo.formatDurationMinutes(timeDiff)}`;
+        timeClass = 'time-slow';
       }
 
-      // Marker pin pointing exactly to the stop coordinates with the info box placed cleanly next to it
-      const displayName = stop.shortName || stop.name;
+      // 2. Glide value & color class
+      const glidePillText = stop.glideRatio !== null
+        ? `${stop.glideRatio}:1`
+        : (stop.isUphill ? 'UP' : '--');
+      const glideText = stop.glideRatio !== null ? `${stop.glideRatio}:1` : 'N/A';
+
+      let glideClass = 'glide-reachable';
+      if (stop.feasibility.status === 'reachable') {
+        glideClass = 'glide-reachable';
+      } else if (stop.feasibility.status === 'marginal') {
+        glideClass = 'glide-marginal';
+      } else {
+        glideClass = 'glide-unreachable';
+      }
+
+      const transitText = hasLiveSchedule ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes) : 'No timetable';
+
+      // Mobile-friendly ultra-compact marker: color-coded Time + color-coded Glide only
       const markerHtml = `
-        <div class="stop-marker-wrapper ${badgeColorClass} ${speedClass} ${rank === 1 ? 'is-best' : ''}">
-          <div class="stop-pin-pointer" title="${stop.name}">
-            <div class="stop-pin-dot"></div>
+        <div class="stop-pill-marker ${index === 0 ? 'is-best' : ''}" title="${stop.name}: ${totalTimeText}, Glide ${glidePillText}">
+          <div class="stop-pill-capsule">
+            <span class="pill-seg pill-time ${timeClass}">${totalTimeText}</span>
+            <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
           </div>
-          <div class="stop-callout-box">
-            <div class="stop-badge-rank-group">
-              <span class="stop-badge-rank">#${rank}</span>
-              <span class="speed-pill ${speedClass}">${speedBadgeText}</span>
-            </div>
-            <div class="stop-badge-content">
-              <div class="stop-badge-top-row">
-                <span class="stop-badge-name" title="${stop.name}">${displayName}</span>
-                <span class="stop-badge-glide">📐 ${glideText}</span>
-              </div>
-              <div class="stop-badge-times-row">
-                ${hasLiveSchedule
-                  ? `<span class="badge-time-flow">🕒 ${depTime} ➔ ${arrTime}</span> <span class="badge-time-total">(${totalTimeText})</span>`
-                  : `<span class="badge-time-flow" style="color: var(--text-muted)">⚠️ No scheduled service</span>`}
-              </div>
-            </div>
-          </div>
+          <div class="stop-pill-pin"></div>
+          <div class="stop-pill-dot"></div>
         </div>
       `;
 
       const stopIcon = L.divIcon({
         className: 'custom-stop-marker-container',
         html: markerHtml,
-        iconSize: [260, 44],
-        iconAnchor: [7, 7], // Pins the 14x14 dot center exactly to [stop.lat, stop.lon]
+        iconSize: [80, 30],
+        iconAnchor: [40, 30],
+        popupAnchor: [0, -30],
       });
 
       const marker = L.marker([stop.lat, stop.lon], { icon: stopIcon, zIndexOffset: 500 - index });
 
-      // Click callback
+      // Click / tap callback: open popup and highlight in list
       marker.on('click', () => {
+        marker.openPopup();
         if (typeof onStopClick === 'function') onStopClick(stop, index);
       });
 

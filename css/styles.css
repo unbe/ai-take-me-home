@@ -778,234 +778,111 @@ input:focus, select:focus {
   overflow: visible !important;
 }
 
-.stop-marker-wrapper {
+/* Minimalist Dual Pill Marker: Time + Glide only (No bulky boxes) */
+.stop-pill-marker {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  position: relative;
-  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.7));
   cursor: pointer;
-}
-
-/* Small pinpoint clearly marking the exact geographic coordinates */
-.stop-pin-pointer {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #ffffff;
-  border: 2.5px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
-  position: relative;
-  z-index: 2;
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.7));
   transition: transform 0.15s ease;
 }
 
-.stop-pin-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
+.stop-pill-marker:hover,
+.stop-pill-marker:active {
+  transform: scale(1.15);
+  z-index: 1000 !important;
 }
 
-/* Connecting stem between pinpoint and box */
-.stop-marker-wrapper::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  width: 6px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.6);
-  z-index: 1;
-}
-
-/* Info box positioned clearly next to the pinpoint marker */
-.stop-callout-box {
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(8px);
-  border-radius: 7px;
-  padding: 3px 7px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 5px;
-  border-width: 1.5px;
-  border-style: solid;
-  border-color: inherit;
-  white-space: nowrap;
-  position: relative;
-  z-index: 2;
-}
-
-.stop-marker-wrapper:hover .stop-pin-pointer {
-  transform: scale(1.25);
-}
-
-.stop-marker-wrapper:hover .stop-callout-box {
-  background: rgba(30, 41, 59, 0.98);
-}
-
-/* Status colors apply to pinpoint and callout box */
-.stop-marker-wrapper.badge-reachable {
-  color: var(--color-reachable);
-  border-color: var(--color-reachable);
-}
-.stop-marker-wrapper.badge-reachable .stop-pin-pointer {
-  border-color: var(--color-reachable);
-}
-.stop-marker-wrapper.badge-reachable .stop-pin-dot {
-  background: var(--color-reachable);
-}
-
-.stop-marker-wrapper.badge-marginal {
-  color: var(--color-marginal);
-  border-color: var(--color-marginal);
-}
-.stop-marker-wrapper.badge-marginal .stop-pin-pointer {
-  border-color: var(--color-marginal);
-}
-.stop-marker-wrapper.badge-marginal .stop-pin-dot {
-  background: var(--color-marginal);
-}
-
-.stop-marker-wrapper.badge-unreachable {
-  color: var(--color-unreachable);
-  border-color: var(--color-unreachable);
-}
-.stop-marker-wrapper.badge-unreachable .stop-pin-pointer {
-  border-color: var(--color-unreachable);
-}
-.stop-marker-wrapper.badge-unreachable .stop-pin-dot {
-  background: var(--color-unreachable);
-}
-
-.stop-marker-wrapper.is-best .stop-pin-pointer {
-  box-shadow: 0 0 0 3px #38bdf8, 0 0 10px rgba(56, 189, 248, 0.8);
-}
-.stop-marker-wrapper.is-best .stop-callout-box {
-  border-width: 2px;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-}
-
-.stop-badge-rank-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.stop-badge-rank {
-  font-size: 0.72rem;
-  font-weight: 900;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  line-height: 1.1;
-}
-
-/* Speed indicator pills */
-.speed-pill {
-  font-size: 0.58rem;
-  font-weight: 800;
-  padding: 1px 4px;
-  border-radius: 4px;
-  letter-spacing: 0.2px;
-  text-transform: uppercase;
-}
-
-.speed-pill.speed-fastest {
-  background: #0284c7;
-  color: #f0f9ff;
-  box-shadow: 0 0 6px rgba(14, 165, 233, 0.6);
-}
-
-.speed-pill.speed-fast {
-  background: #059669;
-  color: #ecfdf5;
-}
-
-.speed-pill.speed-moderate {
-  background: #d97706;
-  color: #fffbeb;
-}
-
-.speed-pill.speed-slow {
-  background: #ea580c;
-  color: #fff7ed;
-}
-
-.stop-badge-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+/* Two-tone capsule: Time on left, Glide on right */
+.stop-pill-capsule {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 9999px;
   overflow: hidden;
+  background: #0f172a;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-.stop-badge-top-row {
+.stop-pill-marker.is-best .stop-pill-capsule {
+  border: 2px solid #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.6), 0 2px 8px rgba(0, 0, 0, 0.7);
+}
+
+/* Common segment styling */
+.pill-seg {
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: center;
 }
 
-.stop-badge-name {
-  font-size: 0.75rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-  color: #fff;
+/* --- TIME COLOR TIERS --- */
+.pill-seg.time-fastest {
+  background: #0284c7; /* Cyan/blue - fastest */
+  color: #ffffff;
 }
-
-.stop-badge-glide {
-  font-size: 0.64rem;
-  font-weight: 800;
-  color: #94a3b8;
-  white-space: nowrap;
+.pill-seg.time-fast {
+  background: #0d9488; /* Teal - fast */
+  color: #ffffff;
 }
-
-.stop-badge-times-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.68rem;
-  font-weight: 800;
-  white-space: nowrap;
+.pill-seg.time-moderate {
+  background: #d97706; /* Amber - moderate */
+  color: #ffffff;
 }
-
-.badge-time-flow {
-  color: #38bdf8;
-  font-feature-settings: "tnum";
-  font-variant-numeric: tabular-nums;
+.pill-seg.time-slow {
+  background: #dc2626; /* Crimson - slow */
+  color: #ffffff;
 }
-
-.badge-time-total {
+.pill-seg.time-none {
+  background: #475569; /* Slate - no timetable */
   color: #cbd5e1;
-  font-size: 0.62rem;
-  font-weight: 600;
 }
 
-/* Speed-tiered left border glow on callout box */
-.stop-marker-wrapper.speed-fastest .stop-callout-box {
-  border-left-width: 3.5px;
-  border-left-color: #38bdf8;
+/* --- GLIDE COLOR TIERS --- */
+.pill-seg.glide-reachable {
+  background: #15803d; /* Vibrant Emerald green - reachable */
+  color: #ffffff;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
 }
-.stop-marker-wrapper.speed-fast .stop-callout-box {
-  border-left-width: 3.5px;
-  border-left-color: #34d399;
+.pill-seg.glide-marginal {
+  background: #b45309; /* Warm amber - marginal */
+  color: #ffffff;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
 }
-.stop-marker-wrapper.speed-moderate .stop-callout-box {
-  border-left-width: 3.5px;
-  border-left-color: #fbbf24;
+.pill-seg.glide-unreachable {
+  background: #991b1b; /* Dark red - unreachable / uphill */
+  color: #ffffff;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
 }
-.stop-marker-wrapper.speed-slow .stop-callout-box {
-  border-left-width: 3.5px;
-  border-left-color: #fb923c;
+
+/* Downward pointer stem connecting capsule to coordinate point */
+.stop-pill-pin {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(255, 255, 255, 0.9);
+  margin-top: -1px;
+}
+
+.stop-pill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.7);
+  margin-top: 1px;
 }
 
 /* POPUP CARD */
