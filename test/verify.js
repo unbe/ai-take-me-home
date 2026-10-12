@@ -175,6 +175,60 @@ async function runTests() {
   }
   console.log('Test 9: Destination coordinates geocoding into address for SBB: PASS');
 
+  // Test 10: Station badge first transport method icon
+  const mockTrainItinerary = {
+    itineraries: [
+      {
+        duration: 3600,
+        startTime: '2026-10-12T10:15:00Z',
+        endTime: '2026-10-12T11:15:00Z',
+        legs: [
+          { mode: 'WALK', duration: 120, startTime: '2026-10-12T10:15:00Z', endTime: '2026-10-12T10:17:00Z' },
+          { mode: 'RAIL', duration: 3480, startTime: '2026-10-12T10:17:00Z', endTime: '2026-10-12T11:15:00Z', routeShortName: 'IC 61' },
+        ],
+      },
+    ],
+  };
+  const parsedTrain = Transit.parseItineraries(mockTrainItinerary, new Date('2026-10-12T10:15:00Z'), { lat: 46.68, lon: 7.85 }, { lat: 46.95, lon: 7.44 });
+  if (parsedTrain.firstIcon !== '🚆') {
+    throw new Error(`Expected train icon 🚆, got: ${parsedTrain.firstIcon}`);
+  }
+
+  const mockBusItinerary = {
+    itineraries: [
+      {
+        duration: 1800,
+        startTime: '2026-10-12T14:00:00Z',
+        endTime: '2026-10-12T14:30:00Z',
+        legs: [
+          { mode: 'BUS', duration: 1800, startTime: '2026-10-12T14:00:00Z', endTime: '2026-10-12T14:30:00Z', routeShortName: 'B 103' },
+        ],
+      },
+    ],
+  };
+  const parsedBus = Transit.parseItineraries(mockBusItinerary, new Date('2026-10-12T14:00:00Z'), { lat: 46.68, lon: 7.85 }, { lat: 46.95, lon: 7.44 });
+  if (parsedBus.firstIcon !== '🚌') {
+    throw new Error(`Expected bus icon 🚌, got: ${parsedBus.firstIcon}`);
+  }
+
+  const mockCableCarItinerary = {
+    itineraries: [
+      {
+        duration: 900,
+        startTime: '2026-10-12T09:00:00Z',
+        endTime: '2026-10-12T09:15:00Z',
+        legs: [
+          { mode: 'CABLE_CAR', duration: 900, startTime: '2026-10-12T09:00:00Z', endTime: '2026-10-12T09:15:00Z', routeShortName: 'Firstbahn' },
+        ],
+      },
+    ],
+  };
+  const parsedCableCar = Transit.parseItineraries(mockCableCarItinerary, new Date('2026-10-12T09:00:00Z'), { lat: 46.68, lon: 7.85 }, { lat: 46.95, lon: 7.44 });
+  if (parsedCableCar.firstIcon !== '🚠') {
+    throw new Error(`Expected cable car icon 🚠, got: ${parsedCableCar.firstIcon}`);
+  }
+  console.log(`Test 10: Station badge transport icons (Train: ${parsedTrain.firstIcon}, Bus: ${parsedBus.firstIcon}, Cable: ${parsedCableCar.firstIcon}): PASS`);
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

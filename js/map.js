@@ -282,11 +282,21 @@ export const MapManager = {
       const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
       const isQuerying = !!stop.isQuerying;
 
-      // 1. Time string: departure -> arrival time, e.g. "12:44 -> 14:23"
+      // First transport method icon (e.g. 🚆 train, 🚌 bus, 🚊 tram, 🚠 cable car)
+      let transportIcon = stop.transit?.firstIcon;
+      if (!transportIcon && stop.transit?.legs?.length) {
+        const firstTransitLeg = stop.transit.legs.find(l => l.mode !== 'WALK') || stop.transit.legs[0];
+        transportIcon = firstTransitLeg?.icon;
+      }
+      if (!transportIcon) {
+        transportIcon = stop.icon || (stop.type === 'station' ? '🚆' : '🚌');
+      }
+
+      // 1. Time string: departure [transport icon] arrival time, e.g. "01:23 🚆 12:23"
       const depTime = Geo.formatTime(stop.transit?.departureTime);
       const arrTime = Geo.formatTime(stop.transit?.arrivalTime);
       const timePillText = (hasLiveSchedule && depTime && arrTime)
-        ? `${depTime} -> ${arrTime}`
+        ? `${depTime} ${transportIcon} ${arrTime}`
         : (isQuerying ? '...' : '--');
 
       const tripMin = (hasLiveSchedule && isFinite(stop.totalTripMinutes)) ? stop.totalTripMinutes : Infinity;

@@ -107,7 +107,7 @@ export const Transit = {
 
     // Parse legs
     const legs = (best.legs || []).map(leg => {
-      const mode = leg.mode || 'TRANSIT';
+      const mode = (leg.mode || 'TRANSIT').toUpperCase();
       const line = leg.routeShortName || leg.headsign || leg.agencyName || '';
       const depTime = leg.startTime ? new Date(leg.startTime) : null;
       const arrTime = leg.endTime ? new Date(leg.endTime) : null;
@@ -115,10 +115,11 @@ export const Transit = {
 
       let icon = '🚌';
       if (mode === 'WALK') icon = '🚶';
-      else if (mode === 'RAIL' || mode === 'LONG_DISTANCE' || mode === 'REGIONAL') icon = '🚆';
-      else if (mode === 'TRAM' || mode === 'SUBWAY') icon = '🚊';
-      else if (mode === 'BUS') icon = '🚌';
-      else if (mode === 'FERRY') icon = '⛴️';
+      else if (mode === 'RAIL' || mode === 'LONG_DISTANCE' || mode === 'REGIONAL' || mode === 'SUBURBAN' || mode === 'TRAIN' || mode === 'HIGH_SPEED_RAIL') icon = '🚆';
+      else if (mode === 'TRAM' || mode === 'SUBWAY' || mode === 'METRO' || mode === 'LIGHT_RAIL') icon = '🚊';
+      else if (mode === 'BUS' || mode === 'COACH') icon = '🚌';
+      else if (mode === 'FERRY' || mode === 'BOAT' || mode === 'SHIP') icon = '⛴️';
+      else if (mode === 'CABLE_CAR' || mode === 'FUNICULAR' || mode === 'GONDOLA' || mode === 'AERIALWAY' || mode === 'CABLEWAY') icon = '🚠';
 
       return {
         mode,
@@ -134,6 +135,8 @@ export const Transit = {
 
     const transfers = Math.max(0, legs.filter(l => l.mode !== 'WALK').length - 1);
     const transitLegs = legs.filter(l => l.mode !== 'WALK');
+    const firstTransitLeg = transitLegs.length > 0 ? transitLegs[0] : (legs.length > 0 ? legs[0] : null);
+    const firstIcon = firstTransitLeg ? firstTransitLeg.icon : '🚆';
     const lastTransitLeg = transitLegs.length > 0 ? transitLegs[transitLegs.length - 1] : null;
     const destinationStopName = lastTransitLeg ? lastTransitLeg.toName : (legs.length > 0 ? legs[legs.length - 1].toName : null);
 
@@ -147,6 +150,7 @@ export const Transit = {
       transfers,
       destinationStopName: destinationStopName || null,
       legs,
+      firstIcon,
       summary: legs.filter(l => l.mode !== 'WALK').map(l => `${l.icon} ${l.line || l.mode}`).join(' ➔ ') || '🚶 Walk direct',
     };
   },
