@@ -597,6 +597,25 @@ input:focus, select:focus {
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.6), 0 2px 8px rgba(0, 0, 0, 0.7);
 }
 
+.stop-pill-marker.is-selected {
+  transform: scale(1.18);
+  z-index: 1200 !important;
+}
+
+.stop-pill-marker.is-selected .stop-pill-capsule {
+  border: 2px solid #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.7), 0 4px 18px rgba(56, 189, 248, 0.8) !important;
+}
+
+.stop-pill-marker.is-selected .stop-pill-pin {
+  border-top-color: #38bdf8 !important;
+}
+
+.stop-pill-marker.is-selected .stop-pill-dot {
+  background: #38bdf8 !important;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 10px #38bdf8 !important;
+}
+
 /* Common segment styling */
 .pill-seg {
   padding: 2px 6px;

@@ -308,6 +308,7 @@ let currentlyTappedRank = 1;
 function showTappedStopCard(stop, rank = 1) {
   currentlyTappedStop = stop;
   currentlyTappedRank = rank;
+  MapManager.selectStop(stop.id);
   if (!UI.tappedStopCard) return;
 
   const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
@@ -356,6 +357,7 @@ function showTappedStopCard(stop, rank = 1) {
 
 function hideTappedStopCard() {
   currentlyTappedStop = null;
+  MapManager.clearSelection();
   if (UI.tappedStopCard) {
     UI.tappedStopCard.style.display = 'none';
   }
@@ -600,6 +602,13 @@ function initEvents() {
       State.pilot.lon = lon;
       syncInputsFromState();
       showToast(`Updated pilot position to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    }
+  };
+
+  // Map background tap: deselect stop and hide details card
+  MapManager.onMapBackgroundClick = () => {
+    if (!UI.inputPanel.classList.contains('is-open')) {
+      hideTappedStopCard();
     }
   };
 }

@@ -10,6 +10,10 @@ export const MapManager = {
   pilotMarker: null,
   destMarker: null,
   onLocationSelected: null,
+  onMapBackgroundClick: null,
+  stopMarkers: {},
+  flightLines: {},
+  selectedStopId: null,
 
   init(containerId = 'map') {
     if (this.map) return this.map;
@@ -17,10 +21,9 @@ export const MapManager = {
     // Default center (Alps paragliding hub: Interlaken)
     this.map = L.map(containerId, {
       zoomControl: false, // We'll position zoom control carefully for mobile
-      closePopupOnClick: false, // Do not auto-close popups when tapping or dragging map
     }).setView([46.6863, 7.8632], 12);
 
-    // Zoom control in top right so it doesn't collide with bottom drawer
+    // Zoom control in top right
     L.control.zoom({ position: 'topright' }).addTo(this.map);
 
     // Base Layers
@@ -29,7 +32,7 @@ export const MapManager = {
       attribution: '&copy; OpenStreetMap contributors',
     });
 
-    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{y}.png', {
       maxZoom: 17,
       attribution: '&copy; OpenTopoMap contributors',
     });
@@ -98,10 +101,13 @@ export const MapManager = {
     this.markersLayer = L.layerGroup().addTo(this.map);
     this.linesLayer = L.layerGroup().addTo(this.map);
 
-    // Map click handler for setting locations
+    // Map click handler
     this.map.on('click', (e) => {
       if (typeof this.onLocationSelected === 'function') {
         this.onLocationSelected(e.latlng.lat, e.latlng.lng);
+      }
+      if (typeof this.onMapBackgroundClick === 'function') {
+        this.onMapBackgroundClick();
       }
     });
 
@@ -175,14 +181,12 @@ export const MapManager = {
    * Renders candidate stop markers with numerical & color-coded badges
    */
   renderStops(stops, pilotCoord, destCoord, onStopClick, shouldFitBounds = false) {
-    // Clear existing candidate markers & lines while remembering any currently open popup
-    let openStopId = null;
     this.linesLayer.clearLayers();
+    this.stopMarkers = {};
+    this.flightLines = {};
+
     this.markersLayer.eachLayer(layer => {
       if (layer !== this.pilotMarker && layer !== this.destMarker) {
-        if (typeof layer.isPopupOpen === 'function' && layer.isPopupOpen() && layer._stopId) {
-          openStopId = layer._stopId;
-        }
         this.markersLayer.removeLayer(layer);
       }
     });
@@ -194,14 +198,14 @@ export const MapManager = {
     stops.forEach((stop, index) => {
       const rank = index + 1;
       const isReachable = stop.feasibility.status === 'reachable';
-      const isMarginal = stop.feasibility.status === 'marginal';
-      
-      const badgeColorClass = stop.feasibility.badgeClass;
-      // 1. Time value & color class
       const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
       const isQuerying = !!stop.isQuerying;
-      const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
-        ? Geo.formatDurationMinutes(stop.totalTripMinutes)
+
+      // 1. Time string: departure -> arrival time, e.g. "12:44 -> 14:23"
+      const depTime = Geo.formatTime(stop.transit?.departureTime);
+      const arrTime = Geo.formatTime(stop.transit?.arrivalTime);
+      const timePillText = (hasLiveSchedule && depTime && arrTime)
+        ? `${depTime} -> ${arrTime}`
         : (isQuerying ? '...' : '--');
 
       const tripMin = (hasLiveSchedule && isFinite(stop.totalTripMinutes)) ? stop.totalTripMinutes : Infinity;
@@ -224,7 +228,6 @@ export const MapManager = {
       const glidePillText = stop.glideRatio !== null
         ? `${stop.glideRatio}:1`
         : (stop.isUphill ? 'UP' : '--');
-      const glideText = stop.glideRatio !== null ? `${stop.glideRatio}:1` : 'N/A';
 
       let glideClass = 'glide-reachable';
       if (stop.feasibility.status === 'reachable') {
@@ -235,29 +238,14 @@ export const MapManager = {
         glideClass = 'glide-unreachable';
       }
 
-      const depText = hasLiveSchedule
-        ? Geo.formatTime(stop.transit?.departureTime)
-        : (isQuerying ? 'Querying...' : (stop.transit ? 'None scheduled' : 'Pending query...'));
-
-      const transitText = hasLiveSchedule
-        ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes)
-        : (isQuerying ? 'Querying...' : (stop.transit ? 'No timetable' : 'Pending...'));
-
-      const totalTravelText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
-        ? `${totalTimeText} (Arr ${Geo.formatTime(stop.transit?.arrivalTime)})`
-        : (isQuerying ? 'Querying timetable...' : (stop.transit ? 'No route scheduled' : 'Timetable pending...'));
-
-      const legsSummary = hasLiveSchedule
-        ? (stop.transit?.summary || 'Transit route')
-        : (stop.transit?.summary || 'Timetable query pending');
-
       const isBest = index === 0 && hasLiveSchedule && isFinite(stop.totalTripMinutes);
+      const isSelected = String(this.selectedStopId) === String(stop.id);
 
-      // Mobile-friendly ultra-compact marker: color-coded Time + color-coded Glide only
+      // Mobile-friendly ultra-compact marker: color-coded Time (dep -> arr) + color-coded Glide only
       const markerHtml = `
-        <div class="stop-pill-marker ${isBest ? 'is-best' : ''}" title="${stop.name}: ${totalTimeText}, Glide ${glidePillText}">
+        <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: ${timePillText}, Glide ${glidePillText}">
           <div class="stop-pill-capsule">
-            <span class="pill-seg pill-time ${timeClass}">${totalTimeText}</span>
+            <span class="pill-seg pill-time ${timeClass}">${timePillText}</span>
             <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
           </div>
           <div class="stop-pill-pin"></div>
@@ -268,115 +256,62 @@ export const MapManager = {
       const stopIcon = L.divIcon({
         className: 'custom-stop-marker-container',
         html: markerHtml,
-        iconSize: [80, 30],
-        iconAnchor: [40, 30],
-        popupAnchor: [0, -30],
+        iconSize: [140, 30],
+        iconAnchor: [70, 30],
       });
 
       const marker = L.marker([stop.lat, stop.lon], {
         icon: stopIcon,
-        zIndexOffset: 500 - index,
+        zIndexOffset: isSelected ? 1200 : (500 - index),
         riseOnHover: true,
       });
       marker._stopId = stop.id;
 
-      // Click / tap handler: stop propagation so map click doesn't close or interfere
+      // Click / tap handler: DO NOT show duplicate popup on map. Only notify onStopClick to show bottom card!
       const triggerSelect = (e) => {
         if (e && e.originalEvent) {
           L.DomEvent.stopPropagation(e.originalEvent);
         } else if (e) {
           L.DomEvent.stopPropagation(e);
         }
-        marker.openPopup();
-        if (typeof onStopClick === 'function') onStopClick(stop, rank);
+        if (typeof onStopClick === 'function') {
+          onStopClick(stop, rank);
+        }
       };
 
       marker.on('click', triggerSelect);
-
-      // Rich popup showing everything known so far
-      const popupHtml = `
-        <div class="popup-card">
-          <div class="popup-header ${badgeColorClass}">
-            <span class="popup-rank">#${rank}</span>
-            <span class="popup-name">${stop.icon} ${stop.name}</span>
-          </div>
-          <div class="popup-body">
-            <div class="popup-row">
-              <span>Feasibility:</span>
-              <strong style="color: ${stop.feasibility.color}">${stop.feasibility.label}</strong>
-            </div>
-            <div class="popup-row">
-              <span>Glide Ratio (L/D):</span>
-              <strong>${glideText}</strong>
-            </div>
-            <div class="popup-row">
-              <span>Distance & Drop:</span>
-              <span>${Geo.formatDistance(stop.distKm)} | -${stop.altDropM}m</span>
-            </div>
-            <div class="popup-row">
-              <span>Time to reach stop:</span>
-              <strong>${Geo.formatDurationMinutes(stop.reachTimeMinutes)}</strong>
-            </div>
-            <div class="popup-row">
-              <span>Transit Departure:</span>
-              <strong>${depText}</strong>
-            </div>
-            <div class="popup-row">
-              <span>Transit Duration:</span>
-              <strong>${transitText}</strong>
-            </div>
-            ${hasLiveSchedule && stop.transit?.waitAtStopMinutes >= 60 ? `
-            <div class="popup-row" style="color: var(--accent-amber);">
-              <span>Wait at stop:</span>
-              <strong>${Geo.formatDurationMinutes(stop.transit.waitAtStopMinutes)}</strong>
-            </div>` : ''}
-            <div class="popup-row highlight">
-              <span>Total Travel:</span>
-              <strong>${totalTravelText}</strong>
-            </div>
-            <div class="popup-legs">
-              <small>${legsSummary}</small>
-            </div>
-            <div class="popup-links-row">
-              <a class="card-link-btn gmaps" href="${Geo.getGoogleMapsUrl(stop.lat, stop.lon, destCoord.lat, destCoord.lon)}" target="_blank" rel="noopener">
-                <span>🗺️ Google Maps</span>
-              </a>
-              <a class="card-link-btn sbb-app" href="${Geo.getSbbMobileUrl(stop.name, destCoord.name || `${destCoord.lat.toFixed(4)},${destCoord.lon.toFixed(4)}`)}">
-                <span>📱 SBB App</span>
-              </a>
-              <a class="card-link-btn sbb" href="${Geo.getSbbWebUrl(stop, destCoord, stop.transit?.departureTime || stop.targetDepartureDate)}" target="_blank" rel="noopener">
-                <span>🚆 SBB Web</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      `;
-
-      marker.bindPopup(popupHtml, { autoPan: openStopId !== stop.id });
       marker.addTo(this.markersLayer);
 
-      // Also attach direct DOM click listener to guaranteed trigger on all mobile touch environments
       const el = marker.getElement();
       if (el) {
         L.DomEvent.on(el, 'click', triggerSelect);
       }
 
-      if (openStopId === stop.id) {
-        marker.openPopup();
-      }
+      this.stopMarkers[stop.id] = marker;
 
-      // Draw flight glide line from pilot to stop (interactive: false so line never blocks taps!)
+      // Draw flight glide line from pilot to stop (interactive: false so line never blocks taps)
       const lineColor = stop.feasibility.color;
-      L.polyline(
+      const polyline = L.polyline(
         [[pilotCoord.lat, pilotCoord.lon], [stop.lat, stop.lon]],
         {
-          color: lineColor,
-          weight: rank === 1 ? 4 : 2.5,
-          opacity: 0.85,
+          color: isSelected ? '#38bdf8' : lineColor,
+          weight: isSelected ? 5.5 : (rank === 1 ? 4 : 2.5),
+          opacity: isSelected ? 1.0 : (this.selectedStopId ? 0.25 : 0.85),
           dashArray: isReachable ? null : '6, 6',
           interactive: false,
         }
-      ).addTo(this.linesLayer);
+      );
+      polyline._defaultColor = lineColor;
+      polyline._defaultWeight = rank === 1 ? 4 : 2.5;
+      polyline._defaultOpacity = 0.85;
+      polyline._defaultDashArray = isReachable ? null : '6, 6';
+      polyline.addTo(this.linesLayer);
+
+      if (isSelected) {
+        polyline.bringToFront();
+      }
+
+      this.flightLines[stop.id] = polyline;
     });
 
     if (shouldFitBounds) {
@@ -397,7 +332,76 @@ export const MapManager = {
   },
 
   /**
-   * Pan to specific stop and open popup
+   * Highlights the selected stop marker and flight line, dimming others
+   */
+  selectStop(stopId) {
+    this.selectedStopId = stopId;
+    this.updateSelectionStyles();
+  },
+
+  /**
+   * Clears stop and flight line selection
+   */
+  clearSelection() {
+    this.selectedStopId = null;
+    this.updateSelectionStyles();
+  },
+
+  /**
+   * Updates CSS and line styles according to currently selected stop
+   */
+  updateSelectionStyles() {
+    // Update markers
+    for (const [id, marker] of Object.entries(this.stopMarkers)) {
+      const isSelected = (String(id) === String(this.selectedStopId));
+      marker.setZIndexOffset(isSelected ? 1200 : 500);
+      const el = marker.getElement();
+      if (el) {
+        const markerDiv = el.querySelector('.stop-pill-marker');
+        if (markerDiv) {
+          if (isSelected) {
+            markerDiv.classList.add('is-selected');
+          } else {
+            markerDiv.classList.remove('is-selected');
+          }
+        }
+      }
+    }
+
+    // Update flight lines
+    for (const [id, line] of Object.entries(this.flightLines)) {
+      const isSelected = (String(id) === String(this.selectedStopId));
+      if (!this.selectedStopId) {
+        // Reset to original styling
+        line.setStyle({
+          color: line._defaultColor,
+          weight: line._defaultWeight,
+          opacity: line._defaultOpacity,
+          dashArray: line._defaultDashArray,
+        });
+      } else if (isSelected) {
+        // Highlight active line
+        line.setStyle({
+          color: '#38bdf8',
+          weight: 5.5,
+          opacity: 1.0,
+          dashArray: null,
+        });
+        line.bringToFront();
+      } else {
+        // Dim other lines
+        line.setStyle({
+          color: line._defaultColor,
+          weight: 1.8,
+          opacity: 0.25,
+          dashArray: line._defaultDashArray,
+        });
+      }
+    }
+  },
+
+  /**
+   * Pan to specific stop
    */
   focusStop(lat, lon) {
     this.map.setView([lat, lon], 14, { animate: true });
