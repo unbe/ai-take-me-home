@@ -233,7 +233,63 @@ async function runTests() {
   if (parsedCableCar.firstIcon !== '🚠') {
     throw new Error(`Expected cable car icon 🚠, got: ${parsedCableCar.firstIcon}`);
   }
-  console.log(`Test 10: Station badge transport icons (Train: ${parsedTrain.firstIcon}, Bus: ${parsedBus.firstIcon}, Cable: ${parsedCableCar.firstIcon}): PASS`);
+
+  // S-Bahn check: commuter trains (S3, S5, S20) returned as METRO or SUBURBAN must get train icon 🚆 (not bus or tram)
+  const mockSbahnItinerary = {
+    itineraries: [
+      {
+        duration: 1800,
+        startTime: '2026-10-12T21:57:00Z',
+        endTime: '2026-10-12T22:30:00Z',
+        legs: [
+          { mode: 'METRO', duration: 1980, startTime: '2026-10-12T21:57:00Z', endTime: '2026-10-12T22:30:00Z', routeShortName: 'S3', agencyName: 'BLS AG' },
+        ],
+      },
+    ],
+  };
+  const parsedSbahn = Transit.parseItineraries(mockSbahnItinerary, new Date('2026-10-12T21:57:00Z'), { lat: 47.12, lon: 7.27 }, { lat: 47.19, lon: 8.48 });
+  if (parsedSbahn.firstIcon !== '🚆') {
+    throw new Error(`Expected S-Bahn icon 🚆, got: ${parsedSbahn.firstIcon}`);
+  }
+
+  console.log(`Test 10: Station badge transport icons (Train: ${parsedTrain.firstIcon}, S-Bahn: ${parsedSbahn.firstIcon}, Bus: ${parsedBus.firstIcon}, Cable: ${parsedCableCar.firstIcon}): PASS`);
+
+  // Test 11: Independent departure (latest best) and arrival (earliest best) color tier classification
+  function calculateTimeTiers(depTime, arrTime, maxDepMs, minArrMs) {
+    const depMs = new Date(depTime).getTime();
+    const arrMs = new Date(arrTime).getTime();
+
+    const depDiffMin = Math.max(0, (maxDepMs - depMs) / 60000);
+    let depClass = 'tier-poor';
+    if (depDiffMin <= 10) depClass = 'tier-best';
+    else if (depDiffMin <= 30) depClass = 'tier-good';
+    else if (depDiffMin <= 60) depClass = 'tier-moderate';
+
+    const arrDiffMin = Math.max(0, (arrMs - minArrMs) / 60000);
+    let arrClass = 'tier-poor';
+    if (arrDiffMin <= 10) arrClass = 'tier-best';
+    else if (arrDiffMin <= 30) arrClass = 'tier-good';
+    else if (arrDiffMin <= 60) arrClass = 'tier-moderate';
+
+    return { depClass, arrClass };
+  }
+
+  const maxDepMs = new Date('2026-10-12T15:00:00Z').getTime(); // Latest departure: 15:00
+  const minArrMs = new Date('2026-10-12T16:00:00Z').getTime(); // Earliest arrival: 16:00
+
+  // Option A: Departs at 15:00 (latest = best), Arrives at 16:45 (45m later than earliest = moderate)
+  const optA = calculateTimeTiers('2026-10-12T15:00:00Z', '2026-10-12T16:45:00Z', maxDepMs, minArrMs);
+  if (optA.depClass !== 'tier-best' || optA.arrClass !== 'tier-moderate') {
+    throw new Error(`Option A tier mismatch: ${JSON.stringify(optA)}`);
+  }
+
+  // Option B: Departs at 13:45 (75m earlier than latest = poor), Arrives at 16:00 (earliest = best)
+  const optB = calculateTimeTiers('2026-10-12T13:45:00Z', '2026-10-12T16:00:00Z', maxDepMs, minArrMs);
+  if (optB.depClass !== 'tier-poor' || optB.arrClass !== 'tier-best') {
+    throw new Error(`Option B tier mismatch: ${JSON.stringify(optB)}`);
+  }
+
+  console.log('Test 11: Independent departure (latest=best) & arrival (earliest=best) tiers: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }

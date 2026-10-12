@@ -291,9 +291,24 @@ export const MapManager = {
       }
     }
 
-    // Determine speed tier relative to confirmed timetable options
-    const confirmedStops = stops.filter(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
-    const minTripMin = confirmedStops.length > 0 ? confirmedStops[0].totalTripMinutes : Infinity;
+    // Calculate extremes among confirmed timetable options:
+    // - Latest departure is best (gives pilot maximum flight time)
+    // - Earliest arrival is best (gets pilot home quickest)
+    const confirmedStops = stops.filter(s =>
+      s.transit &&
+      s.transit.hasSchedule &&
+      s.transit.departureTime &&
+      s.transit.arrivalTime
+    );
+
+    let maxDepMs = -Infinity;
+    let minArrMs = Infinity;
+    for (const s of confirmedStops) {
+      const depT = new Date(s.transit.departureTime).getTime();
+      const arrT = new Date(s.transit.arrivalTime).getTime();
+      if (!isNaN(depT) && depT > maxDepMs) maxDepMs = depT;
+      if (!isNaN(arrT) && arrT < minArrMs) minArrMs = arrT;
+    }
 
     stops.forEach((stop, index) => {
       const rank = index + 1;
@@ -308,31 +323,44 @@ export const MapManager = {
         transportIcon = firstTransitLeg?.icon;
       }
       if (!transportIcon) {
-        transportIcon = stop.icon || (stop.type === 'station' ? '🚆' : '🚌');
+        const isTrain = stop.type === 'station' || stop.type === 'train' || /\b(Bahnhof|Gare|Stazione|S-Bahn)\b/i.test(stop.name);
+        transportIcon = stop.icon || (isTrain ? '🚆' : '🚌');
       }
 
-      // 1. Time string: departure [transport icon] arrival time, e.g. "23:55 🚆 06:28"
-      // Shows when the user needs to start walking/leaving from that stop
-      const depTime = Geo.formatTime(stop.transit?.departureTime);
-      const arrTime = Geo.formatTime(stop.transit?.arrivalTime);
-      const timePillText = (hasLiveSchedule && depTime && arrTime)
-        ? `${depTime} ${transportIcon} ${arrTime}`
-        : (isQuerying ? '...' : '--');
+      // Format times
+      const depTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : (isQuerying ? '...' : '--');
+      const arrTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : (isQuerying ? '...' : '--');
 
-      const tripMin = (hasLiveSchedule && isFinite(stop.totalTripMinutes)) ? stop.totalTripMinutes : Infinity;
-      const timeDiff = (isFinite(tripMin) && isFinite(minTripMin)) ? tripMin - minTripMin : Infinity;
+      // 1. Separate Color Tiers:
+      // - Latest departure is best (tier-best)
+      // - Earliest arrival is best (tier-best)
+      let depClass = 'tier-none';
+      let arrClass = 'tier-none';
 
-      let timeClass = 'time-none';
-      if (!hasLiveSchedule || !isFinite(stop.totalTripMinutes)) {
-        timeClass = isQuerying ? 'time-querying' : 'time-none';
-      } else if (index === 0 || timeDiff <= 10) {
-        timeClass = 'time-fastest';
-      } else if (timeDiff <= 30) {
-        timeClass = 'time-fast';
-      } else if (timeDiff <= 60) {
-        timeClass = 'time-moderate';
-      } else {
-        timeClass = 'time-slow';
+      if (isQuerying) {
+        depClass = 'tier-querying';
+        arrClass = 'tier-querying';
+      } else if (hasLiveSchedule && isFinite(maxDepMs) && isFinite(minArrMs)) {
+        const depMs = new Date(stop.transit.departureTime).getTime();
+        const arrMs = new Date(stop.transit.arrivalTime).getTime();
+
+        // Departure: minutes earlier than latest departure (0 = best)
+        if (!isNaN(depMs)) {
+          const depDiffMin = Math.max(0, (maxDepMs - depMs) / 60000);
+          if (depDiffMin <= 10) depClass = 'tier-best';
+          else if (depDiffMin <= 30) depClass = 'tier-good';
+          else if (depDiffMin <= 60) depClass = 'tier-moderate';
+          else depClass = 'tier-poor';
+        }
+
+        // Arrival: minutes later than earliest arrival (0 = best)
+        if (!isNaN(arrMs)) {
+          const arrDiffMin = Math.max(0, (arrMs - minArrMs) / 60000);
+          if (arrDiffMin <= 10) arrClass = 'tier-best';
+          else if (arrDiffMin <= 30) arrClass = 'tier-good';
+          else if (arrDiffMin <= 60) arrClass = 'tier-moderate';
+          else arrClass = 'tier-poor';
+        }
       }
 
       // 2. Glide value & color class
@@ -363,11 +391,20 @@ export const MapManager = {
           const pill = el.querySelector('.stop-pill-marker');
           if (pill) {
             pill.className = `stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}`;
-            pill.title = `${stop.name}: ${timePillText}, Glide ${glidePillText}`;
-            const timeSeg = pill.querySelector('.pill-time');
-            if (timeSeg) {
-              timeSeg.className = `pill-seg pill-time ${timeClass}`;
-              timeSeg.textContent = timePillText;
+            pill.title = `${stop.name}: Dep ${depTime}, Arr ${arrTime}, Glide ${glidePillText}`;
+            const depSeg = pill.querySelector('.pill-dep');
+            if (depSeg) {
+              depSeg.className = `pill-seg pill-dep ${depClass}`;
+              depSeg.textContent = depTime;
+            }
+            const iconSeg = pill.querySelector('.pill-icon');
+            if (iconSeg) {
+              iconSeg.textContent = transportIcon;
+            }
+            const arrSeg = pill.querySelector('.pill-arr');
+            if (arrSeg) {
+              arrSeg.className = `pill-seg pill-arr ${arrClass}`;
+              arrSeg.textContent = arrTime;
             }
             const glideSeg = pill.querySelector('.pill-glide');
             if (glideSeg) {
@@ -379,9 +416,11 @@ export const MapManager = {
       } else {
         // CREATE NEW MARKER
         const markerHtml = `
-          <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: ${timePillText}, Glide ${glidePillText}">
+          <div class="stop-pill-marker ${isBest ? 'is-best' : ''} ${isSelected ? 'is-selected' : ''}" title="${stop.name}: Dep ${depTime}, Arr ${arrTime}, Glide ${glidePillText}">
             <div class="stop-pill-capsule">
-              <span class="pill-seg pill-time ${timeClass}">${timePillText}</span>
+              <span class="pill-seg pill-dep ${depClass}">${depTime}</span>
+              <span class="pill-seg pill-icon">${transportIcon}</span>
+              <span class="pill-seg pill-arr ${arrClass}">${arrTime}</span>
               <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
             </div>
             <div class="stop-pill-pin"></div>

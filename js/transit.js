@@ -108,18 +108,39 @@ export const Transit = {
     // Parse legs
     const legs = (best.legs || []).map(leg => {
       const mode = (leg.mode || 'TRANSIT').toUpperCase();
-      const line = leg.routeShortName || leg.headsign || leg.agencyName || '';
+      const line = (leg.routeShortName || leg.headsign || leg.agencyName || '').trim();
       const depTime = leg.startTime ? new Date(leg.startTime) : null;
       const arrTime = leg.endTime ? new Date(leg.endTime) : null;
       const legDurationMin = leg.duration ? Math.round(leg.duration / 60) : 0;
 
+      // S-Bahn in Switzerland/Germany/Austria (e.g. S3, S5, S20, S-Bahn) is a commuter train, never a bus or tram
+      const isSbahn = /^S\s*\d+/i.test(line) || /^S-Bahn/i.test(line) || /^S\b/i.test(line);
+
       let icon = '🚌';
-      if (mode === 'WALK') icon = '🚶';
-      else if (mode === 'RAIL' || mode === 'LONG_DISTANCE' || mode === 'REGIONAL' || mode === 'SUBURBAN' || mode === 'TRAIN' || mode === 'HIGH_SPEED_RAIL') icon = '🚆';
-      else if (mode === 'TRAM' || mode === 'SUBWAY' || mode === 'METRO' || mode === 'LIGHT_RAIL') icon = '🚊';
-      else if (mode === 'BUS' || mode === 'COACH') icon = '🚌';
-      else if (mode === 'FERRY' || mode === 'BOAT' || mode === 'SHIP') icon = '⛴️';
-      else if (mode === 'CABLE_CAR' || mode === 'FUNICULAR' || mode === 'GONDOLA' || mode === 'AERIALWAY' || mode === 'CABLEWAY') icon = '🚠';
+      if (mode === 'WALK') {
+        icon = '🚶';
+      } else if (
+        isSbahn ||
+        mode === 'RAIL' ||
+        mode === 'LONG_DISTANCE' ||
+        mode === 'REGIONAL' ||
+        mode === 'REGIONAL_RAIL' ||
+        mode === 'SUBURBAN' ||
+        mode === 'TRAIN' ||
+        mode === 'HIGH_SPEED_RAIL'
+      ) {
+        icon = '🚆';
+      } else if (mode === 'TRAM' || mode === 'LIGHT_RAIL') {
+        icon = '🚊';
+      } else if (mode === 'SUBWAY' || mode === 'METRO') {
+        icon = isSbahn ? '🚆' : '🚇';
+      } else if (mode === 'BUS' || mode === 'COACH') {
+        icon = isSbahn ? '🚆' : '🚌';
+      } else if (mode === 'FERRY' || mode === 'BOAT' || mode === 'SHIP') {
+        icon = '⛴️';
+      } else if (mode === 'CABLE_CAR' || mode === 'FUNICULAR' || mode === 'GONDOLA' || mode === 'AERIALWAY' || mode === 'CABLEWAY') {
+        icon = '🚠';
+      }
 
       return {
         mode,

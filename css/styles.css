@@ -583,28 +583,50 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   justify-content: center;
 }
 
-/* --- TIME COLOR TIERS --- */
+/* Segment layout adjustments */
+.pill-seg.pill-dep {
+  padding-right: 4px;
+}
+.pill-seg.pill-icon {
+  background: rgba(15, 23, 42, 0.95);
+  font-size: 10px;
+  padding: 2px 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+.pill-seg.pill-arr {
+  padding-left: 4px;
+  border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* --- TIME / SCHEDULE COLOR TIERS --- */
+.pill-seg.tier-best,
 .pill-seg.time-fastest {
-  background: #0284c7; /* Cyan/blue - fastest */
+  background: #0284c7; /* Cyan/blue - Best */
   color: #ffffff;
 }
+.pill-seg.tier-good,
 .pill-seg.time-fast {
-  background: #0d9488; /* Teal - fast */
+  background: #0d9488; /* Teal - Good */
   color: #ffffff;
 }
+.pill-seg.tier-moderate,
 .pill-seg.time-moderate {
-  background: #d97706; /* Amber - moderate */
+  background: #d97706; /* Amber - Moderate */
   color: #ffffff;
 }
+.pill-seg.tier-poor,
 .pill-seg.time-slow {
-  background: #dc2626; /* Crimson - slow */
+  background: #dc2626; /* Crimson - Poor */
   color: #ffffff;
 }
+.pill-seg.tier-querying,
 .pill-seg.time-querying {
   background: #1e293b; /* Dark slate - actively fetching timetable */
   color: #38bdf8;
   animation: pulse-query 0.8s infinite alternate;
 }
+.pill-seg.tier-none,
 .pill-seg.time-none {
   background: #475569; /* Slate - no timetable or pending */
   color: #cbd5e1;

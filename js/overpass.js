@@ -194,10 +194,14 @@ out center;`;
       // Determine transport type
       let type = 'bus';
       let icon = '🚌';
-      if (tags.railway === 'station') {
-        type = 'train';
-        icon = '🚆';
-      } else if (tags.railway === 'halt' || tags.train === 'yes') {
+      const isTrainStation =
+        tags.railway === 'station' ||
+        tags.railway === 'halt' ||
+        tags.train === 'yes' ||
+        tags.suburban === 'yes' ||
+        /\b(Bahnhof|Gare|Stazione|S-Bahn)\b/i.test(fullName);
+
+      if (isTrainStation) {
         type = 'train';
         icon = '🚆';
       } else if (tags.railway === 'tram_stop' || tags.tram === 'yes') {
@@ -206,6 +210,9 @@ out center;`;
       } else if (tags.amenity === 'ferry_terminal') {
         type = 'ferry';
         icon = '⛴️';
+      } else if (tags.aerialway || tags.cable_car === 'yes' || tags.funicular === 'yes') {
+        type = 'cable_car';
+        icon = '🚠';
       }
 
       const distKm = Geo.haversineDistanceKm(lat, lon, stopLat, stopLon);
