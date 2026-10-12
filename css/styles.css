@@ -488,14 +488,24 @@ input:focus, select:focus {
 }
 
 .custom-stop-marker-container {
-  pointer-events: auto !important;
+  width: 0 !important;
+  height: 0 !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
   overflow: visible !important;
+  pointer-events: auto !important;
   touch-action: manipulation !important;
   cursor: pointer !important;
 }
 
 /* Minimalist Dual Pill Marker: Time + Glide only (No bulky boxes) */
 .stop-pill-marker {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  transform: translate(-50%, 0);
+  transform-origin: bottom center;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -506,13 +516,22 @@ input:focus, select:focus {
   touch-action: manipulation !important;
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.7));
   transition: transform 0.15s ease;
-  padding: 8px 10px;
-  margin: -8px -10px;
+  white-space: nowrap;
+}
+
+/* Generous touch target area without altering marker coordinates */
+.stop-pill-marker::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: -12px;
+  right: -12px;
+  bottom: -10px;
 }
 
 .stop-pill-marker:hover,
 .stop-pill-marker:active {
-  transform: scale(1.15);
+  transform: translate(-50%, 0) scale(1.15);
   z-index: 1000 !important;
 }
 
@@ -533,7 +552,7 @@ input:focus, select:focus {
 }
 
 .stop-pill-marker.is-selected {
-  transform: scale(1.18);
+  transform: translate(-50%, 0) scale(1.18);
   z-index: 1200 !important;
 }
 
@@ -626,12 +645,14 @@ input:focus, select:focus {
 }
 
 .stop-pill-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.85);
   margin-top: 1px;
+  margin-bottom: -3px; /* Centers the 6px dot precisely on the coordinate point where the line ends */
+  flex-shrink: 0;
 }
 
 /* POPUP CARD & LEAFLET POPUP OVERRIDES */

@@ -214,7 +214,7 @@ export const MapManager = {
   /**
    * Updates Destination marker
    */
-  setDestinationMarker(lat, lon, label = 'Destination') {
+  setDestinationMarker(lat, lon) {
     if (this.destMarker) {
       this.markersLayer.removeLayer(this.destMarker);
     }
@@ -236,7 +236,6 @@ export const MapManager = {
     this.destMarker.bindPopup(`
       <div class="popup-card">
         <h4>🏁 Destination</h4>
-        <p>${label}</p>
         <p><strong>Coordinates:</strong> ${lat.toFixed(5)}, ${lon.toFixed(5)}</p>
       </div>
     `);
@@ -367,8 +366,8 @@ export const MapManager = {
         const stopIcon = L.divIcon({
           className: 'custom-stop-marker-container',
           html: markerHtml,
-          iconSize: [140, 30],
-          iconAnchor: [70, 30],
+          iconSize: [0, 0],
+          iconAnchor: [0, 0],
         });
 
         marker = L.marker([stop.lat, stop.lon], {

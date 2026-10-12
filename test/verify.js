@@ -93,7 +93,7 @@ async function runTests() {
   // Test 7: URL query string reflection & parsing
   const testState = {
     pilot: { lat: 46.98000, lon: 8.75000, altM: 2500 },
-    destination: { lat: 47.18900, lon: 8.48600, name: 'Steinhausen' },
+    destination: { lat: 47.18900, lon: 8.48600 },
     settings: { stopsCount: 20, searchRadiusKm: 12, speedKmH: 35, bufferMinutes: 25, maxGlideRatio: 9.0 },
   };
   const testParams = new URLSearchParams();
@@ -102,7 +102,6 @@ async function runTests() {
   testParams.set('alt', Math.round(testState.pilot.altM));
   testParams.set('destLat', testState.destination.lat.toFixed(5));
   testParams.set('destLon', testState.destination.lon.toFixed(5));
-  testParams.set('destName', testState.destination.name);
   testParams.set('radius', testState.settings.searchRadiusKm);
   testParams.set('stops', testState.settings.stopsCount);
   testParams.set('speed', testState.settings.speedKmH);
@@ -114,7 +113,9 @@ async function runTests() {
   if (
     parseFloat(parsed.get('lat')) !== 46.98 ||
     parseFloat(parsed.get('alt')) !== 2500 ||
-    parsed.get('destName') !== 'Steinhausen' ||
+    parseFloat(parsed.get('destLat')) !== 47.189 ||
+    parseFloat(parsed.get('destLon')) !== 8.486 ||
+    parsed.has('destName') ||
     parseFloat(parsed.get('glide')) !== 9.0 ||
     parseInt(parsed.get('stops'), 10) !== 20
   ) {

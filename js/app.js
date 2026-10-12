@@ -18,8 +18,6 @@ const State = {
   destination: {
     lat: 46.9480,
     lon: 7.4474,
-    name: 'Bern',
-    uicRef: '8507000',
   },
   settings: {
     stopsCount: 15,
@@ -30,40 +28,6 @@ const State = {
   },
   stops: [],
   isCalculating: false,
-};
-
-// Presets for quick demonstration & one-click pilot setup
-const PRESETS = {
-  interlaken: {
-    pilot: { lat: 46.6863, lon: 7.8632, altM: 1600 },
-    dest: { lat: 46.9480, lon: 7.4474, name: 'Bern', uicRef: '8507000' },
-    stopsCount: 15,
-    radiusKm: 8,
-  },
-  annecy: {
-    pilot: { lat: 45.8580, lon: 6.2230, altM: 1450 },
-    dest: { lat: 46.2044, lon: 6.1432, name: 'Geneva', uicRef: '8501008' },
-    stopsCount: 15,
-    radiusKm: 10,
-  },
-  bassano: {
-    pilot: { lat: 45.8080, lon: 11.7780, altM: 1200 },
-    dest: { lat: 45.4408, lon: 12.3155, name: 'Venice', uicRef: '8300098' },
-    stopsCount: 15,
-    radiusKm: 8,
-  },
-  steinhausen: {
-    pilot: { lat: 47.1916, lon: 8.4837, altM: 800 },
-    dest: { lat: 47.3769, lon: 8.5417, name: 'Zurich HB', uicRef: '8503000' },
-    stopsCount: 15,
-    radiusKm: 8,
-  },
-  verbier: {
-    pilot: { lat: 46.0961, lon: 7.2286, altM: 2200 },
-    dest: { lat: 46.5197, lon: 6.6323, name: 'Lausanne', uicRef: '8501120' },
-    stopsCount: 15,
-    radiusKm: 10,
-  },
 };
 
 // UI Elements
@@ -143,10 +107,10 @@ function updateUrlFromState() {
   if (isFinite(State.pilot.lon)) params.set('lon', State.pilot.lon.toFixed(5));
   if (isFinite(State.pilot.altM)) params.set('alt', Math.round(State.pilot.altM));
 
-  // Destination coordinates & name
+  // Destination coordinates
   if (isFinite(State.destination.lat)) params.set('destLat', State.destination.lat.toFixed(5));
   if (isFinite(State.destination.lon)) params.set('destLon', State.destination.lon.toFixed(5));
-  if (State.destination.name) params.set('destName', State.destination.name);
+  params.delete('destName');
 
   // Settings from settings panel
   params.set('radius', State.settings.searchRadiusKm);
@@ -189,10 +153,9 @@ function parseStateFromUrl() {
     }
   }
 
-  // Destination coordinates & name
+  // Destination coordinates
   const destLat = params.get('destLat') || params.get('dest_lat');
   const destLon = params.get('destLon') || params.get('dest_lon') || params.get('destLng');
-  const destName = params.get('destName') || params.get('dest_name') || params.get('dest');
 
   if (destLat !== null && destLon !== null) {
     const parsedDestLat = parseFloat(destLat);
@@ -200,10 +163,7 @@ function parseStateFromUrl() {
     if (!isNaN(parsedDestLat) && !isNaN(parsedDestLon)) {
       State.destination.lat = parsedDestLat;
       State.destination.lon = parsedDestLon;
-      State.destination.name = destName || `${parsedDestLat.toFixed(4)}, ${parsedDestLon.toFixed(4)}`;
     }
-  } else if (destName) {
-    State.destination.name = destName;
   }
 
   // Settings from settings panel
@@ -246,7 +206,7 @@ function syncInputsFromState() {
     UI.chipPilotText.textContent = `${Math.round(State.pilot.altM)}m (${State.pilot.lat.toFixed(2)}, ${State.pilot.lon.toFixed(2)})`;
   }
   if (UI.chipDestText) {
-    UI.chipDestText.textContent = State.destination.name || `${State.destination.lat.toFixed(2)}, ${State.destination.lon.toFixed(2)}`;
+    UI.chipDestText.textContent = `${State.destination.lat.toFixed(2)}, ${State.destination.lon.toFixed(2)}`;
   }
 }
 
@@ -380,9 +340,9 @@ function showTappedStopCard(stop, rank = 1) {
   }
 
   // Links
-  const destNameOrCoords = State.destination.name || `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
+  const destCoords = `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
   UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
-  UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, destNameOrCoords);
+  UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, destCoords);
   UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, State.destination, stop.transit?.departureTime || stop.targetDepartureDate);
 
   UI.tappedStopCard.style.display = 'flex';
@@ -432,7 +392,7 @@ async function calculateRoutes(options = {}) {
 
   // 1. Update map pins immediately with the new pilot and destination
   MapManager.setPilotMarker(pilot.lat, pilot.lon, pilot.altM);
-  MapManager.setDestinationMarker(destination.lat, destination.lon, destination.name);
+  MapManager.setDestinationMarker(destination.lat, destination.lon);
   MapManager.clearStops();
 
   try {
@@ -687,19 +647,9 @@ function initEvents() {
     hideTappedStopCard();
     State.destination.lat = lat;
     State.destination.lon = lon;
-    const matched = Object.values(PRESETS).find(
-      p => Math.abs(p.dest.lat - lat) < 0.005 && Math.abs(p.dest.lon - lon) < 0.005
-    );
-    if (matched) {
-      State.destination.name = matched.dest.name;
-      State.destination.uicRef = matched.dest.uicRef;
-    } else {
-      State.destination.name = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-      State.destination.uicRef = null;
-    }
     syncInputsFromState();
     updateUrlFromState();
-    showToast(`🏁 Destination set to ${State.destination.name}`);
+    showToast(`🏁 Destination set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
     calculateRoutes();
   };
 
