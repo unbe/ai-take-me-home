@@ -397,10 +397,31 @@ function hideTappedStopCard() {
 }
 
 /**
+ * Active calculation abort controller and sequence tracking
+ */
+let currentCalculationController = null;
+let currentCalculationId = 0;
+
+export function abortActiveCalculation() {
+  if (currentCalculationController) {
+    console.log('[App] Aborting active calculation...');
+    currentCalculationController.abort();
+    currentCalculationController = null;
+  }
+}
+
+/**
  * Core Algorithm: Search stops, compute glide ratios, and query public transit
  */
-async function calculateRoutes() {
-  if (State.isCalculating) return;
+async function calculateRoutes(options = {}) {
+  // Abort any ongoing calculation immediately and restart with the latest parameters
+  abortActiveCalculation();
+
+  const calcId = ++currentCalculationId;
+  const abortController = new AbortController();
+  currentCalculationController = abortController;
+  const signal = abortController.signal;
+
   State.isCalculating = true;
 
   syncStateFromInputs();
@@ -409,12 +430,34 @@ async function calculateRoutes() {
 
   const { pilot, destination, settings } = State;
 
-  // 1. Update map pins
+  // 1. Update map pins immediately with the new pilot and destination
   MapManager.setPilotMarker(pilot.lat, pilot.lon, pilot.altM);
   MapManager.setDestinationMarker(destination.lat, destination.lon, destination.name);
   MapManager.clearStops();
 
   try {
+    // If pilot elevation needs to be updated (e.g. from setting pilot position via map contextmenu)
+    if (options.updatePilotElevation) {
+      try {
+        const elevs = await Elevation.getBatchElevations([{ lat: pilot.lat, lon: pilot.lon }], signal);
+        if (signal.aborted || calcId !== currentCalculationId) return;
+        if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
+          const groundAlt = Math.round(elevs[0]);
+          if (State.pilot.altM < groundAlt) {
+            State.pilot.altM = groundAlt + 300;
+            MapManager.setPilotMarker(pilot.lat, pilot.lon, State.pilot.altM);
+            syncInputsFromState();
+            updateUrlFromState();
+          }
+        }
+      } catch (e) {
+        if (signal.aborted || calcId !== currentCalculationId) return;
+        console.warn('Could not query terrain elevation for pilot position:', e);
+      }
+    }
+
+    if (signal.aborted || calcId !== currentCalculationId) return;
+
     // 2. Discover nearest stops via Overpass API with Adaptive Glide Ratio Radius Expansion:
     // If the stops found within the current radius still have great glide ratios (e.g. <= maxGlideRatio),
     // keep expanding the search radius up to a strict 20km maximum to discover faster transit options.
@@ -422,10 +465,13 @@ async function calculateRoutes() {
     setLoading(true, `Querying stops (expanding up to 20km if glide ratio is great)...`);
 
     const shouldContinueExpanding = async (currentStops, currentRadiusM) => {
+      if (signal.aborted || calcId !== currentCalculationId) return false;
       if (currentRadiusM >= 20000) return false;
 
       // Check elevation and glide ratio for candidate stops found so far
-      await Elevation.populateStopElevations(currentStops);
+      await Elevation.populateStopElevations(currentStops, signal);
+      if (signal.aborted || calcId !== currentCalculationId) return false;
+
       let reachableCount = 0;
       let greatGlideCount = 0;
 
@@ -457,12 +503,17 @@ async function calculateRoutes() {
       pilot.lon,
       settings.stopsCount,
       maxSearchRadiusM,
-      shouldContinueExpanding
+      shouldContinueExpanding,
+      signal
     );
+
+    if (signal.aborted || calcId !== currentCalculationId) return;
 
     // 3. Batch elevation lookup via Open-Meteo API
     setLoading(true, `Fetching terrain elevations for ${stops.length} candidate stops...`);
-    await Elevation.populateStopElevations(stops);
+    await Elevation.populateStopElevations(stops, signal);
+
+    if (signal.aborted || calcId !== currentCalculationId) return;
 
     // 4. Calculate glide ratios & reach times instantaneously (local vector math)
     const now = new Date();
@@ -498,8 +549,9 @@ async function calculateRoutes() {
       return a.distM - b.distM;
     });
 
+    if (signal.aborted || calcId !== currentCalculationId) return;
+
     // 4b. PROGRESSIVE RENDER 1: Display all candidate stops immediately!
-    // At this moment, glide ratios, drop altitudes, and reach times are fully known.
     State.stops = stops;
     MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
       showTappedStopCard(clickedStop, rank);
@@ -511,6 +563,8 @@ async function calculateRoutes() {
     let liveQueriesCount = 0;
 
     for (let i = 0; i < stops.length; i++) {
+      if (signal.aborted || calcId !== currentCalculationId) return;
+
       const stop = stops[i];
       liveQueriesCount++;
       setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
@@ -519,7 +573,9 @@ async function calculateRoutes() {
         showTappedStopCard(clickedStop, rank);
       }, false);
 
-      stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
+      stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate, 3000, signal);
+      if (signal.aborted || calcId !== currentCalculationId) return;
+
       stop.isQuerying = false;
 
       // Total journey time from now to final destination arrival
@@ -562,6 +618,8 @@ async function calculateRoutes() {
       }
     }
 
+    if (signal.aborted || calcId !== currentCalculationId) return;
+
     setLoading(false);
     const confirmedCount = stops.filter(s => s.transit && s.transit.hasSchedule).length;
     const fastestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
@@ -569,11 +627,20 @@ async function calculateRoutes() {
     showToast(`Found ${stops.length} options (${confirmedCount} live timetables).${fastestText}`);
 
   } catch (err) {
+    if (signal.aborted || calcId !== currentCalculationId || err.name === 'AbortError') {
+      console.log('[App] Calculation superseded/aborted.');
+      return;
+    }
     console.error('[App] Routing computation failed:', err);
     setLoading(false);
     showToast(`Error: ${err.message}`);
   } finally {
-    State.isCalculating = false;
+    if (calcId === currentCalculationId) {
+      State.isCalculating = false;
+      if (currentCalculationController === abortController) {
+        currentCalculationController = null;
+      }
+    }
   }
 }
 
@@ -604,26 +671,15 @@ function initEvents() {
   };
 
   // Long-press contextmenu actions: Set Pilot Position or Set Destination
-  MapManager.onSetPilotPosition = async (lat, lon) => {
+  MapManager.onSetPilotPosition = (lat, lon) => {
     closeInputPanel();
     hideTappedStopCard();
     State.pilot.lat = lat;
     State.pilot.lon = lon;
-    try {
-      const elevs = await Elevation.getBatchElevations([{ lat, lon }]);
-      if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
-        const groundAlt = Math.round(elevs[0]);
-        if (State.pilot.altM < groundAlt) {
-          State.pilot.altM = groundAlt + 300;
-        }
-      }
-    } catch (e) {
-      console.warn('Could not query terrain elevation for new pilot position:', e);
-    }
     syncInputsFromState();
     updateUrlFromState();
     showToast(`🪂 Pilot position set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
-    calculateRoutes();
+    calculateRoutes({ updatePilotElevation: true });
   };
 
   MapManager.onSetDestination = (lat, lon) => {
@@ -646,6 +702,13 @@ function initEvents() {
     showToast(`🏁 Destination set to ${State.destination.name}`);
     calculateRoutes();
   };
+
+  // Browser navigation history support (Back / Forward button)
+  window.addEventListener('popstate', () => {
+    parseStateFromUrl();
+    syncInputsFromState();
+    calculateRoutes();
+  });
 }
 
 /**

@@ -10,8 +10,14 @@ export const Elevation = {
    * @param {Array<{lat: number, lon: number}>} points
    * @returns {Promise<Array<number>>} Array of elevations in meters MSL
    */
-  async getBatchElevations(points) {
+  async getBatchElevations(points, signal = null) {
     if (!points || points.length === 0) return [];
+
+    if (signal?.aborted) {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
 
     const lats = points.map(p => p.lat.toFixed(6)).join(',');
     const lons = points.map(p => p.lon.toFixed(6)).join(',');
@@ -21,6 +27,7 @@ export const Elevation = {
       const response = await fetch(url, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
+        signal: signal || undefined,
       });
 
       if (!response.ok) {
@@ -36,6 +43,9 @@ export const Elevation = {
 
       throw new Error('Unexpected elevation response format');
     } catch (err) {
+      if (signal?.aborted || err.name === 'AbortError') {
+        throw err;
+      }
       console.warn('[Elevation] Batch lookup failed, using fallback estimations:', err.message);
       // Fallback: return default estimated ground level if offline
       return points.map(() => 500);
@@ -45,12 +55,13 @@ export const Elevation = {
   /**
    * Populates stop objects with their elevation
    * @param {Array<Object>} stops
+   * @param {AbortSignal} signal
    * @returns {Promise<Array<Object>>}
    */
-  async populateStopElevations(stops) {
+  async populateStopElevations(stops, signal = null) {
     if (!stops || stops.length === 0) return stops;
 
-    const elevations = await this.getBatchElevations(stops);
+    const elevations = await this.getBatchElevations(stops, signal);
     stops.forEach((stop, idx) => {
       stop.elevationM = elevations[idx] !== undefined ? elevations[idx] : 500;
     });

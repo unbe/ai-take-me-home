@@ -39,11 +39,20 @@ out center;`;
   },
 
   /**
-   * Fetches data with timeout
+   * Fetches data with timeout and external abort signal support
    */
-  async fetchWithTimeout(url, body, timeoutMs = 7000) {
+  async fetchWithTimeout(url, body, timeoutMs = 7000, signal = null) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) {
+        controller.abort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    }
 
     try {
       const response = await fetch(url, {
@@ -57,6 +66,9 @@ out center;`;
       });
 
       clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -65,49 +77,65 @@ out center;`;
       return await response.json();
     } catch (err) {
       clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
       throw err;
     }
   },
 
   /**
-   * Queries Overpass trying each server until one succeeds
+   * Queries Overpass trying each server until one succeeds (or aborted)
    */
-  async executeQuery(query) {
+  async executeQuery(query, signal = null) {
     let lastError = null;
     for (const server of this.SERVERS) {
+      if (signal?.aborted) {
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
       try {
         console.log(`[Overpass] Trying server: ${server}`);
-        const data = await this.fetchWithTimeout(server, query, 8000);
+        const data = await this.fetchWithTimeout(server, query, 8000, signal);
         if (data && Array.isArray(data.elements)) {
           console.log(`[Overpass] Success from ${server}: ${data.elements.length} elements`);
           return data;
         }
       } catch (err) {
+        if (signal?.aborted || err.name === 'AbortError') {
+          throw err;
+        }
         console.warn(`[Overpass] Server ${server} failed:`, err.message);
         lastError = err;
       }
+    }
+    if (signal?.aborted) {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
     }
     throw new Error(`All Overpass API servers failed. Last error: ${lastError?.message || 'unknown'}`);
   },
 
   /**
-   * Finds the N nearest public transport stops to a given coordinate
-   * @param {number} lat Pilot latitude
-   * @param {number} lon Pilot longitude
-   * @param {number} count Number of nearest stops to return (N)
-   * @param {number} initialRadiusM Search radius in meters (default: 6000m)
-   * @returns {Promise<Array>} Array of parsed stop objects sorted by distance
-   */
-  /**
    * Helper to query Overpass for a given radius and parse & deduplicate the returned stops
    */
-  async _queryAndParseStops(lat, lon, radiusM) {
+  async _queryAndParseStops(lat, lon, radiusM, signal = null) {
+    if (signal?.aborted) {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
     const query = this.buildQuery(lat, lon, radiusM);
     let result = null;
 
     try {
-      result = await this.executeQuery(query);
+      result = await this.executeQuery(query, signal);
     } catch (err) {
+      if (signal?.aborted || err.name === 'AbortError') {
+        throw err;
+      }
       console.warn(`[Overpass] Query for radius ${radiusM}m failed:`, err);
       return [];
     }
@@ -281,13 +309,25 @@ out center;`;
    * @param {Function} shouldContinueExpanding Optional async callback (currentStops, currentRadiusM) => boolean
    * @returns {Promise<Array>} Array of parsed stop objects sorted by distance
    */
-  async findNearestStops(lat, lon, count = 15, maxRadiusM = 20000, shouldContinueExpanding = null) {
+  async findNearestStops(lat, lon, count = 15, maxRadiusM = 20000, shouldContinueExpanding = null, signal = null) {
+    if (signal?.aborted) {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+
     const MAX_QUERIES = 5;
     const baseRadiusM = 1000; // Start at 1,000 meters
     const HARD_MAX_RADIUS_M = Math.min(maxRadiusM || 20000, 20000); // Strict 20km ceiling
     let stops = [];
 
     for (let attempt = 1; attempt <= MAX_QUERIES; attempt++) {
+      if (signal?.aborted) {
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
+
       // Exponential increase: 1km -> 2km -> 4km -> 8km -> 16km -> 20km
       let currentRadiusM = Math.round(baseRadiusM * Math.pow(2, attempt - 1));
       if (currentRadiusM > HARD_MAX_RADIUS_M || attempt === MAX_QUERIES) {
@@ -295,7 +335,12 @@ out center;`;
       }
 
       console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Checking radius ${currentRadiusM}m (need ${count} stops, max ${HARD_MAX_RADIUS_M}m)...`);
-      stops = await this._queryAndParseStops(lat, lon, currentRadiusM);
+      stops = await this._queryAndParseStops(lat, lon, currentRadiusM, signal);
+      if (signal?.aborted) {
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
       console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Found ${stops.length} unique stops`);
 
       // If already at or beyond the 20km hard ceiling, or on last attempt, return results
@@ -310,9 +355,18 @@ out center;`;
           try {
             keepGoing = await shouldContinueExpanding(stops, currentRadiusM);
           } catch (e) {
+            if (signal?.aborted || e?.name === 'AbortError') {
+              throw e;
+            }
             console.warn('[Overpass] Error in shouldContinueExpanding callback:', e);
             keepGoing = false;
           }
+        }
+
+        if (signal?.aborted) {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          throw err;
         }
 
         if (!keepGoing) {

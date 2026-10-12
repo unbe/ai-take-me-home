@@ -15,7 +15,13 @@ export const Transit = {
    * @param {Date} departureDate Target departure time (now + reach time)
    * @returns {Promise<Object>} Formatted journey summary
    */
-  async planJourney(fromStop, toCoord, departureDate, maxWalkDistanceM = 3000) {
+  async planJourney(fromStop, toCoord, departureDate, maxWalkDistanceM = 3000, signal = null) {
+    if (signal?.aborted) {
+      const err = new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+
     const fromPlace = `${fromStop.lat.toFixed(6)},${fromStop.lon.toFixed(6)}`;
     const toPlace = `${toCoord.lat.toFixed(6)},${toCoord.lon.toFixed(6)}`;
     const isoTime = departureDate.toISOString();
@@ -35,10 +41,19 @@ export const Transit = {
       headers['User-Agent'] = 'TakeMeHome-ParaglidingTransit/1.0 (https://github.com/artem/take-me-home)';
     }
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
 
+    const onAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) {
+        controller.abort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    }
+
+    try {
       const response = await fetch(url, {
         method: 'GET',
         headers,
@@ -46,6 +61,9 @@ export const Transit = {
       });
 
       clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
 
       if (!response.ok) {
         throw new Error(`Transitous API returned HTTP ${response.status}`);
@@ -56,6 +74,13 @@ export const Transit = {
       this._cache.set(cacheKey, result);
       return result;
     } catch (err) {
+      clearTimeout(timeoutId);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+      if (signal?.aborted || err.name === 'AbortError') {
+        throw err;
+      }
       console.warn(`[Transit] Routing failed for stop ${fromStop.name}:`, err.message);
       return this.generateFallbackRoute(fromStop, toCoord, departureDate);
     }

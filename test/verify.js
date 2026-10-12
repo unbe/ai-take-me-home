@@ -3,8 +3,11 @@
  * Tests core formulas, APIs, and calculations
  */
 import { Geo } from '../js/geo.js';
+import { Transit } from '../js/transit.js';
+import { Elevation } from '../js/elevation.js';
+import { Overpass } from '../js/overpass.js';
 
-function runTests() {
+async function runTests() {
   console.log('=== Starting Unit & Geodesic Tests ===');
 
   // Test 1: Haversine distance
@@ -118,6 +121,48 @@ function runTests() {
     throw new Error('URL params roundtrip failed');
   }
   console.log('Test 7: URL params reflection & parsing: PASS');
+
+  // Test 8: Immediate query abortion support
+  const testAbortController = new AbortController();
+  testAbortController.abort(); // already aborted
+
+  let transitAborted = false;
+  try {
+    await Transit.planJourney(
+      { lat: 46.68, lon: 7.85, name: 'Test Stop' },
+      { lat: 46.95, lon: 7.44 },
+      new Date(),
+      3000,
+      testAbortController.signal
+    );
+  } catch (err) {
+    if (err.name === 'AbortError' || err.message === 'Aborted') {
+      transitAborted = true;
+    }
+  }
+
+  let elevAborted = false;
+  try {
+    await Elevation.getBatchElevations([{ lat: 46.68, lon: 7.85 }], testAbortController.signal);
+  } catch (err) {
+    if (err.name === 'AbortError' || err.message === 'Aborted') {
+      elevAborted = true;
+    }
+  }
+
+  let overpassAborted = false;
+  try {
+    await Overpass.findNearestStops(46.68, 7.85, 5, 2000, null, testAbortController.signal);
+  } catch (err) {
+    if (err.name === 'AbortError' || err.message === 'Aborted') {
+      overpassAborted = true;
+    }
+  }
+
+  if (!transitAborted || !elevAborted || !overpassAborted) {
+    throw new Error(`Abort test failed! Transit: ${transitAborted}, Elevation: ${elevAborted}, Overpass: ${overpassAborted}`);
+  }
+  console.log('Test 8: Immediate query abortion support: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
