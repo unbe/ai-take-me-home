@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=4.1" />
+  <link rel="stylesheet" href="css/styles.css?v=4.2" />
 </head>
 <body>
   <div class="app-container">
@@ -152,10 +152,10 @@
       </button>
     </section>
 
-    <!-- LOADING OVERLAY -->
-    <div id="loading-overlay" class="loading-overlay">
-      <div class="spinner"></div>
-      <div id="loading-text" class="loading-text">Finding nearest transport stops...</div>
+    <!-- NON-INTRUSIVE FLOATING PROGRESS BANNER (Leaves map 100% visible) -->
+    <div id="loading-overlay" class="progress-banner" aria-live="polite">
+      <div class="progress-spinner"></div>
+      <span id="loading-text" class="progress-text">Finding nearest transport stops...</span>
     </div>
 
     <!-- TOAST NOTIFICATION -->
@@ -169,6 +169,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=4.1"></script>
+  <script type="module" src="js/app.js?v=4.2"></script>
 </body>
 </html>

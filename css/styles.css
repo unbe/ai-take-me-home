@@ -623,9 +623,19 @@ input:focus, select:focus {
   background: #dc2626; /* Crimson - slow */
   color: #ffffff;
 }
+.pill-seg.time-querying {
+  background: #1e293b; /* Dark slate - actively fetching timetable */
+  color: #38bdf8;
+  animation: pulse-query 0.8s infinite alternate;
+}
 .pill-seg.time-none {
-  background: #475569; /* Slate - no timetable */
+  background: #475569; /* Slate - no timetable or pending */
   color: #cbd5e1;
+}
+
+@keyframes pulse-query {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
 }
 
 /* --- GLIDE COLOR TIERS --- */
@@ -712,50 +722,60 @@ input:focus, select:focus {
   color: #475569;
 }
 
-/* LOADING OVERLAY */
-.loading-overlay {
+/* NON-INTRUSIVE FLOATING PROGRESS BANNER (Leaves map 100% visible & interactive) */
+.progress-banner {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(4px);
-  z-index: 50;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.loading-overlay.is-active {
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #f8fafc;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
   display: flex;
+  align-items: center;
+  gap: 9px;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+  max-width: 92vw;
+  white-space: nowrap;
 }
 
-.spinner {
-  width: 44px;
-  height: 44px;
-  border: 4px solid rgba(56, 189, 248, 0.2);
+.progress-banner.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.progress-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(56, 189, 248, 0.25);
   border-top-color: #38bdf8;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-text {
-  font-size: 0.95rem;
+.progress-text {
+  font-size: 0.8rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* TOAST ALERTS */
 .toast {
   position: absolute;
-  top: 70px;
+  top: 110px;
   left: 50%;
   transform: translateX(-50%);
   background: #334155;
@@ -768,6 +788,7 @@ input:focus, select:focus {
   z-index: 60;
   display: none;
   box-shadow: var(--shadow-lg);
+  pointer-events: none;
 }
 
 .toast.is-visible {

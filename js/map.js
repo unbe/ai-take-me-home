@@ -174,17 +174,21 @@ export const MapManager = {
    * Renders candidate stop markers with numerical & color-coded badges
    */
   renderStops(stops, pilotCoord, destCoord, onStopClick) {
-    // Clear existing candidate markers & lines
+    // Clear existing candidate markers & lines while remembering any currently open popup
+    let openStopId = null;
     this.linesLayer.clearLayers();
     this.markersLayer.eachLayer(layer => {
       if (layer !== this.pilotMarker && layer !== this.destMarker) {
+        if (typeof layer.isPopupOpen === 'function' && layer.isPopupOpen() && layer._stopId) {
+          openStopId = layer._stopId;
+        }
         this.markersLayer.removeLayer(layer);
       }
     });
 
-    // Determine speed tier relative to other options (stops are already sorted by totalTripMinutes)
-    const minTripMin = stops.length > 0 ? (stops[0].totalTripMinutes || 1) : 1;
-    const maxTripMin = stops.length > 0 ? (stops[stops.length - 1].totalTripMinutes || minTripMin) : minTripMin;
+    // Determine speed tier relative to confirmed timetable options
+    const confirmedStops = stops.filter(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
+    const minTripMin = confirmedStops.length > 0 ? confirmedStops[0].totalTripMinutes : Infinity;
 
     stops.forEach((stop, index) => {
       const rank = index + 1;
@@ -194,16 +198,17 @@ export const MapManager = {
       const badgeColorClass = stop.feasibility.badgeClass;
       // 1. Time value & color class
       const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
+      const isQuerying = !!stop.isQuerying;
       const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
         ? Geo.formatDurationMinutes(stop.totalTripMinutes)
-        : '--';
+        : (isQuerying ? '...' : '--');
 
       const tripMin = (hasLiveSchedule && isFinite(stop.totalTripMinutes)) ? stop.totalTripMinutes : Infinity;
       const timeDiff = (isFinite(tripMin) && isFinite(minTripMin)) ? tripMin - minTripMin : Infinity;
 
-      let timeClass = 'time-fastest';
+      let timeClass = 'time-none';
       if (!hasLiveSchedule || !isFinite(stop.totalTripMinutes)) {
-        timeClass = 'time-none';
+        timeClass = isQuerying ? 'time-querying' : 'time-none';
       } else if (index === 0 || timeDiff <= 10) {
         timeClass = 'time-fastest';
       } else if (timeDiff <= 30) {
@@ -229,11 +234,27 @@ export const MapManager = {
         glideClass = 'glide-unreachable';
       }
 
-      const transitText = hasLiveSchedule ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes) : 'No timetable';
+      const depText = hasLiveSchedule
+        ? Geo.formatTime(stop.transit?.departureTime)
+        : (isQuerying ? 'Querying...' : (stop.transit ? 'None scheduled' : 'Pending query...'));
+
+      const transitText = hasLiveSchedule
+        ? Geo.formatDurationMinutes(stop.transit?.transitDurationMinutes)
+        : (isQuerying ? 'Querying...' : (stop.transit ? 'No timetable' : 'Pending...'));
+
+      const totalTravelText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
+        ? `${totalTimeText} (Arr ${Geo.formatTime(stop.transit?.arrivalTime)})`
+        : (isQuerying ? 'Querying timetable...' : (stop.transit ? 'No route scheduled' : 'Timetable pending...'));
+
+      const legsSummary = hasLiveSchedule
+        ? (stop.transit?.summary || 'Transit route')
+        : (stop.transit?.summary || 'Timetable query pending');
+
+      const isBest = index === 0 && hasLiveSchedule && isFinite(stop.totalTripMinutes);
 
       // Mobile-friendly ultra-compact marker: color-coded Time + color-coded Glide only
       const markerHtml = `
-        <div class="stop-pill-marker ${index === 0 ? 'is-best' : ''}" title="${stop.name}: ${totalTimeText}, Glide ${glidePillText}">
+        <div class="stop-pill-marker ${isBest ? 'is-best' : ''}" title="${stop.name}: ${totalTimeText}, Glide ${glidePillText}">
           <div class="stop-pill-capsule">
             <span class="pill-seg pill-time ${timeClass}">${totalTimeText}</span>
             <span class="pill-seg pill-glide ${glideClass}">${glidePillText}</span>
@@ -252,6 +273,7 @@ export const MapManager = {
       });
 
       const marker = L.marker([stop.lat, stop.lon], { icon: stopIcon, zIndexOffset: 500 - index });
+      marker._stopId = stop.id;
 
       // Click / tap callback: open popup and highlight in list
       marker.on('click', () => {
@@ -259,7 +281,7 @@ export const MapManager = {
         if (typeof onStopClick === 'function') onStopClick(stop, index);
       });
 
-      // Rich popup
+      // Rich popup showing everything known so far
       const popupHtml = `
         <div class="popup-card">
           <div class="popup-header ${badgeColorClass}">
@@ -285,11 +307,11 @@ export const MapManager = {
             </div>
             <div class="popup-row">
               <span>Transit Departure:</span>
-              <strong>${hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : 'None scheduled'}</strong>
+              <strong>${depText}</strong>
             </div>
             <div class="popup-row">
               <span>Transit Duration:</span>
-              <strong>${hasLiveSchedule ? transitText : '--'}</strong>
+              <strong>${transitText}</strong>
             </div>
             ${hasLiveSchedule && stop.transit?.waitAtStopMinutes >= 60 ? `
             <div class="popup-row" style="color: var(--accent-amber);">
@@ -298,10 +320,10 @@ export const MapManager = {
             </div>` : ''}
             <div class="popup-row highlight">
               <span>Total Travel:</span>
-              <strong>${hasLiveSchedule && isFinite(stop.totalTripMinutes) ? `${totalTimeText} (Arr ${Geo.formatTime(stop.transit?.arrivalTime)})` : 'No route scheduled'}</strong>
+              <strong>${totalTravelText}</strong>
             </div>
             <div class="popup-legs">
-              <small>${stop.transit?.summary || 'Transit route'}</small>
+              <small>${legsSummary}</small>
             </div>
             <div class="popup-links-row">
               <a class="card-link-btn gmaps" href="${Geo.getGoogleMapsUrl(stop.lat, stop.lon, destCoord.lat, destCoord.lon)}" target="_blank" rel="noopener">
@@ -318,8 +340,12 @@ export const MapManager = {
         </div>
       `;
 
-      marker.bindPopup(popupHtml);
+      marker.bindPopup(popupHtml, { autoPan: openStopId !== stop.id });
       marker.addTo(this.markersLayer);
+
+      if (openStopId === stop.id) {
+        marker.openPopup();
+      }
 
       // Draw flight glide line from pilot to stop
       const lineColor = stop.feasibility.color;

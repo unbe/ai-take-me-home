@@ -374,17 +374,23 @@ async function calculateRoutes() {
     }
 
     // Sort candidate stops so reachable & marginal ones are queried FIRST
-    // This ensures high-priority viable stops get accurate timetables immediately
+    const priority = { reachable: 0, marginal: 1, unreachable: 2 };
     stops.sort((a, b) => {
-      const priority = { reachable: 0, marginal: 1, unreachable: 2 };
       const pDiff = (priority[a.feasibility.status] || 2) - (priority[b.feasibility.status] || 2);
       if (pDiff !== 0) return pDiff;
       return a.distM - b.distM;
     });
 
+    // 4b. PROGRESSIVE RENDER 1: Display all candidate stops immediately!
+    // At this moment, glide ratios, drop altitudes, and reach times are fully known.
+    State.stops = stops;
+    MapManager.renderStops(stops, pilot, destination);
+
     // 5. Query public transit strictly sequentially (1 request at a time)
     // Query live timetable API for candidate stops that are feasible for flight
     const maxLiveQueries = settings.stopsCount || 15;
+    const viableStops = stops.filter(s => s.feasibility.status === 'reachable' || s.feasibility.status === 'marginal');
+    const totalToQuery = Math.min(viableStops.length, maxLiveQueries);
     let liveQueriesCount = 0;
 
     for (let i = 0; i < stops.length; i++) {
@@ -393,8 +399,12 @@ async function calculateRoutes() {
 
       if (isViableForFlight && liveQueriesCount < maxLiveQueries) {
         liveQueriesCount++;
-        setLoading(true, `Querying timetable ${liveQueriesCount}/${Math.min(stops.length, maxLiveQueries)}: ${stop.name}...`);
+        setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
+        stop.isQuerying = true;
+        MapManager.renderStops(stops, pilot, destination);
+
         stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
+        stop.isQuerying = false;
       } else {
         // Stop without live query or unreachable
         stop.transit = Transit.generateFallbackRoute(
@@ -415,33 +425,33 @@ async function calculateRoutes() {
         stop.totalTripMinutes = Infinity;
       }
 
-      // Progressive live streaming: show first result as soon as ready!
-      if (i === 0) {
-        const initialSorted = [...stops.slice(0, 1)];
-        MapManager.renderStops(initialSorted, pilot, destination);
-      }
+      // Progressive sort: Confirmed live schedules first, ordered by total travel time;
+      // followed by remaining stops sorted by glide feasibility & distance.
+      stops.sort((a, b) => {
+        const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
+        const bHas = b.transit && b.transit.hasSchedule && isFinite(b.totalTripMinutes);
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        if (aHas && bHas) {
+          if (a.totalTripMinutes !== b.totalTripMinutes) {
+            return a.totalTripMinutes - b.totalTripMinutes;
+          }
+          return a.distM - b.distM;
+        }
+        const pDiff = (priority[a.feasibility?.status] ?? 2) - (priority[b.feasibility?.status] ?? 2);
+        if (pDiff !== 0) return pDiff;
+        return a.distM - b.distM;
+      });
+
+      // PROGRESSIVE RENDER: Update map immediately after every stop query!
+      MapManager.renderStops(stops, pilot, destination);
     }
 
-    // 6. Final sort: Confirmed live schedules first, ordered by total travel time
-    stops.sort((a, b) => {
-      const aHas = a.transit && a.transit.hasSchedule;
-      const bHas = b.transit && b.transit.hasSchedule;
-      if (aHas && !bHas) return -1;
-      if (!aHas && bHas) return 1;
-
-      if (a.totalTripMinutes !== b.totalTripMinutes) {
-        return a.totalTripMinutes - b.totalTripMinutes;
-      }
-
-      return a.distM - b.distM;
-    });
-    State.stops = stops;
-
-    // 6. Update Map with custom markers showing color-coded time & glide
-    MapManager.renderStops(stops, pilot, destination);
-
     setLoading(false);
-    showToast(`Calculated ${stops.length} options! Tap any marker for details.`);
+    const confirmedCount = stops.filter(s => s.transit && s.transit.hasSchedule).length;
+    const fastestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
+    const fastestText = fastestStop ? ` Fastest: ${Geo.formatDurationMinutes(fastestStop.totalTripMinutes)} (${fastestStop.name})` : '';
+    showToast(`Found ${stops.length} options (${confirmedCount} live timetables).${fastestText}`);
 
   } catch (err) {
     console.error('[App] Routing computation failed:', err);
