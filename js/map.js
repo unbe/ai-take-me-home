@@ -17,6 +17,7 @@ export const MapManager = {
     // Default center (Alps paragliding hub: Interlaken)
     this.map = L.map(containerId, {
       zoomControl: false, // We'll position zoom control carefully for mobile
+      closePopupOnClick: false, // Do not auto-close popups when tapping or dragging map
     }).setView([46.6863, 7.8632], 12);
 
     // Zoom control in top right so it doesn't collide with bottom drawer
@@ -173,7 +174,7 @@ export const MapManager = {
   /**
    * Renders candidate stop markers with numerical & color-coded badges
    */
-  renderStops(stops, pilotCoord, destCoord, onStopClick) {
+  renderStops(stops, pilotCoord, destCoord, onStopClick, shouldFitBounds = false) {
     // Clear existing candidate markers & lines while remembering any currently open popup
     let openStopId = null;
     this.linesLayer.clearLayers();
@@ -272,14 +273,25 @@ export const MapManager = {
         popupAnchor: [0, -30],
       });
 
-      const marker = L.marker([stop.lat, stop.lon], { icon: stopIcon, zIndexOffset: 500 - index });
+      const marker = L.marker([stop.lat, stop.lon], {
+        icon: stopIcon,
+        zIndexOffset: 500 - index,
+        riseOnHover: true,
+      });
       marker._stopId = stop.id;
 
-      // Click / tap callback: open popup and highlight in list
-      marker.on('click', () => {
+      // Click / tap handler: stop propagation so map click doesn't close or interfere
+      const triggerSelect = (e) => {
+        if (e && e.originalEvent) {
+          L.DomEvent.stopPropagation(e.originalEvent);
+        } else if (e) {
+          L.DomEvent.stopPropagation(e);
+        }
         marker.openPopup();
-        if (typeof onStopClick === 'function') onStopClick(stop, index);
-      });
+        if (typeof onStopClick === 'function') onStopClick(stop, rank);
+      };
+
+      marker.on('click', triggerSelect);
 
       // Rich popup showing everything known so far
       const popupHtml = `
@@ -343,38 +355,45 @@ export const MapManager = {
       marker.bindPopup(popupHtml, { autoPan: openStopId !== stop.id });
       marker.addTo(this.markersLayer);
 
+      // Also attach direct DOM click listener to guaranteed trigger on all mobile touch environments
+      const el = marker.getElement();
+      if (el) {
+        L.DomEvent.on(el, 'click', triggerSelect);
+      }
+
       if (openStopId === stop.id) {
         marker.openPopup();
       }
 
-      // Draw flight glide line from pilot to stop
+      // Draw flight glide line from pilot to stop (interactive: false so line never blocks taps!)
       const lineColor = stop.feasibility.color;
-      const flightLine = L.polyline(
+      L.polyline(
         [[pilotCoord.lat, pilotCoord.lon], [stop.lat, stop.lon]],
         {
           color: lineColor,
           weight: rank === 1 ? 4 : 2.5,
           opacity: 0.85,
           dashArray: isReachable ? null : '6, 6',
+          interactive: false,
         }
       ).addTo(this.linesLayer);
-
-      flightLine.bindTooltip(`${stop.name}: L/D ${glideText}`, { sticky: true });
     });
 
-    // Calculate flight bounds focusing on pilot and all stops within 15 km
-    const flightBounds = L.latLngBounds([[pilotCoord.lat, pilotCoord.lon]]);
-    const stopsWithin15Km = stops.filter(s => s.distKm <= 15);
+    if (shouldFitBounds) {
+      // Calculate flight bounds focusing on pilot and all stops within 15 km
+      const flightBounds = L.latLngBounds([[pilotCoord.lat, pilotCoord.lon]]);
+      const stopsWithin15Km = stops.filter(s => s.distKm <= 15);
 
-    if (stopsWithin15Km.length > 0) {
-      stopsWithin15Km.forEach(s => flightBounds.extend([s.lat, s.lon]));
-    } else {
-      // Fallback: if all stops happen to be farther, include closest 5
-      stops.slice(0, 5).forEach(s => flightBounds.extend([s.lat, s.lon]));
+      if (stopsWithin15Km.length > 0) {
+        stopsWithin15Km.forEach(s => flightBounds.extend([s.lat, s.lon]));
+      } else {
+        // Fallback: if all stops happen to be farther, include closest 5
+        stops.slice(0, 5).forEach(s => flightBounds.extend([s.lat, s.lon]));
+      }
+
+      // Zoom to fit all stops within 15km
+      this.map.fitBounds(flightBounds, { padding: [40, 40], maxZoom: 15 });
     }
-
-    // Zoom to fit all stops within 15km
-    this.map.fitBounds(flightBounds, { padding: [40, 40], maxZoom: 15 });
   },
 
   /**

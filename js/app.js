@@ -83,6 +83,23 @@ const UI = {
   loadingText: document.getElementById('loading-text'),
   toast: document.getElementById('toast'),
 
+  // Tapped Stop Details Box
+  tappedStopCard: document.getElementById('tapped-stop-card'),
+  tappedRank: document.getElementById('tapped-rank'),
+  tappedName: document.getElementById('tapped-name'),
+  tappedBadge: document.getElementById('tapped-badge'),
+  tappedGlide: document.getElementById('tapped-glide'),
+  tappedDrop: document.getElementById('tapped-drop'),
+  tappedReach: document.getElementById('tapped-reach'),
+  tappedDist: document.getElementById('tapped-dist'),
+  tappedTotal: document.getElementById('tapped-total'),
+  tappedArr: document.getElementById('tapped-arr'),
+  tappedLegs: document.getElementById('tapped-legs'),
+  tappedLinkGmaps: document.getElementById('tapped-link-gmaps'),
+  tappedLinkSbbApp: document.getElementById('tapped-link-sbb-app'),
+  tappedLinkSbbWeb: document.getElementById('tapped-link-sbb-web'),
+  btnCloseTappedCard: document.getElementById('btn-close-tapped-card'),
+
   // Inputs
   inputPilotLat: document.getElementById('input-pilot-lat'),
   inputPilotLon: document.getElementById('input-pilot-lon'),
@@ -283,6 +300,68 @@ function closeInputPanel() {
 }
 
 /**
+ * Tapped Stop Details Box (Shows full details + SBB/GMaps links for tapped stop)
+ */
+let currentlyTappedStop = null;
+let currentlyTappedRank = 1;
+
+function showTappedStopCard(stop, rank = 1) {
+  currentlyTappedStop = stop;
+  currentlyTappedRank = rank;
+  if (!UI.tappedStopCard) return;
+
+  const hasLiveSchedule = stop.transit && stop.transit.hasSchedule;
+  const isQuerying = !!stop.isQuerying;
+
+  const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
+    ? Geo.formatDurationMinutes(stop.totalTripMinutes)
+    : (isQuerying ? 'Fetching...' : '--');
+
+  const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : (stop.isUphill ? 'UP' : 'N/A');
+  const dropText = stop.altDropM >= 0 ? `-${stop.altDropM}m drop` : `+${Math.abs(stop.altDropM)}m uphill`;
+  const depText = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
+  const arrText = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : (isQuerying ? 'Querying...' : 'No service');
+
+  UI.tappedRank.textContent = `#${rank}`;
+  UI.tappedName.textContent = `${stop.icon || '🚏'} ${stop.name}`;
+  UI.tappedBadge.className = `status-pill ${stop.feasibility.badgeClass}`;
+  UI.tappedBadge.textContent = stop.feasibility.label;
+
+  UI.tappedGlide.textContent = glideNum;
+  UI.tappedGlide.style.color = stop.feasibility.color;
+  UI.tappedDrop.textContent = dropText;
+
+  UI.tappedReach.textContent = Geo.formatDurationMinutes(stop.reachTimeMinutes);
+  UI.tappedDist.textContent = Geo.formatDistance(stop.distKm);
+
+  UI.tappedTotal.textContent = totalTimeText;
+  UI.tappedArr.textContent = hasLiveSchedule ? `Arr ${arrText}` : (isQuerying ? 'Fetching...' : 'No service');
+
+  if (hasLiveSchedule) {
+    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${stop.transit?.summary || 'Transit route'}`;
+  } else if (isQuerying) {
+    UI.tappedLegs.textContent = '⏳ Live timetable query currently in progress...';
+  } else {
+    UI.tappedLegs.textContent = `⚠️ ${stop.transit?.summary || 'No scheduled transit route found'}`;
+  }
+
+  // Links
+  const destNameOrCoords = State.destination.name || `${State.destination.lat.toFixed(4)}, ${State.destination.lon.toFixed(4)}`;
+  UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon);
+  UI.tappedLinkSbbApp.href = Geo.getSbbMobileUrl(stop.name, destNameOrCoords);
+  UI.tappedLinkSbbWeb.href = Geo.getSbbWebUrl(stop, State.destination, stop.transit?.departureTime || stop.targetDepartureDate);
+
+  UI.tappedStopCard.style.display = 'flex';
+}
+
+function hideTappedStopCard() {
+  currentlyTappedStop = null;
+  if (UI.tappedStopCard) {
+    UI.tappedStopCard.style.display = 'none';
+  }
+}
+
+/**
  * Core Algorithm: Search stops, compute glide ratios, and query public transit
  */
 async function calculateRoutes() {
@@ -290,6 +369,7 @@ async function calculateRoutes() {
 
   syncStateFromInputs();
   closeInputPanel();
+  hideTappedStopCard();
 
   const { pilot, destination, settings } = State;
 
@@ -384,7 +464,9 @@ async function calculateRoutes() {
     // 4b. PROGRESSIVE RENDER 1: Display all candidate stops immediately!
     // At this moment, glide ratios, drop altitudes, and reach times are fully known.
     State.stops = stops;
-    MapManager.renderStops(stops, pilot, destination);
+    MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
+      showTappedStopCard(clickedStop, rank);
+    }, true); // shouldFitBounds = true only on initial candidate render
 
     // 5. Query public transit strictly sequentially (1 request at a time)
     // Query live timetable API for candidate stops that are feasible for flight
@@ -401,7 +483,9 @@ async function calculateRoutes() {
         liveQueriesCount++;
         setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
         stop.isQuerying = true;
-        MapManager.renderStops(stops, pilot, destination);
+        MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
+          showTappedStopCard(clickedStop, rank);
+        }, false);
 
         stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate);
         stop.isQuerying = false;
@@ -443,8 +527,16 @@ async function calculateRoutes() {
         return a.distM - b.distM;
       });
 
-      // PROGRESSIVE RENDER: Update map immediately after every stop query!
-      MapManager.renderStops(stops, pilot, destination);
+      // PROGRESSIVE RENDER: Update map immediately after every stop query without resetting zoom or closing popups!
+      MapManager.renderStops(stops, pilot, destination, (clickedStop, rank) => {
+        showTappedStopCard(clickedStop, rank);
+      }, false);
+
+      // If the currently tapped stop card is visible, refresh its timetable info live!
+      if (currentlyTappedStop && currentlyTappedStop.id === stop.id) {
+        const currentRank = stops.findIndex(s => s.id === stop.id) + 1;
+        showTappedStopCard(stop, currentRank);
+      }
     }
 
     setLoading(false);
@@ -472,6 +564,10 @@ function initEvents() {
   UI.btnGps.addEventListener('click', useCurrentLocation);
   UI.btnPilotGps.addEventListener('click', useCurrentLocation);
 
+  if (UI.btnCloseTappedCard) {
+    UI.btnCloseTappedCard.addEventListener('click', hideTappedStopCard);
+  }
+
   // Preset chips
   document.querySelectorAll('.preset-chip').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -497,13 +593,14 @@ function initEvents() {
   UI.inputDestLat.addEventListener('input', handleDestCoordInput);
   UI.inputDestLon.addEventListener('input', handleDestCoordInput);
 
-  // Map click to set location
+  // Map click to set location (ONLY when input panel is open so browsing stops doesn't move pilot)
   MapManager.onLocationSelected = (lat, lon) => {
-    // If input panel is open, update destination or pilot based on focus
-    State.pilot.lat = lat;
-    State.pilot.lon = lon;
-    syncInputsFromState();
-    showToast(`Updated pilot position to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    if (UI.inputPanel.classList.contains('is-open')) {
+      State.pilot.lat = lat;
+      State.pilot.lon = lon;
+      syncInputsFromState();
+      showToast(`Updated pilot position to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    }
   };
 }
 

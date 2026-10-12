@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=4.2" />
+  <link rel="stylesheet" href="css/styles.css?v=4.3" />
 </head>
 <body>
   <div class="app-container">
@@ -158,6 +158,56 @@
       <span id="loading-text" class="progress-text">Finding nearest transport stops...</span>
     </div>
 
+    <!-- FLOATING DETAILS BOX FOR TAPPED STOP -->
+    <div id="tapped-stop-card" class="tapped-stop-card" style="display: none;" role="region" aria-label="Stop Details">
+      <div class="tapped-card-header">
+        <div class="tapped-card-title-group">
+          <span id="tapped-rank" class="tapped-rank-pill">#1</span>
+          <span id="tapped-name" class="tapped-stop-name">🚆 Stop Name</span>
+        </div>
+        <div class="tapped-card-actions">
+          <div id="tapped-badge" class="status-pill badge-reachable">🟢 Reachable</div>
+          <button id="btn-close-tapped-card" class="tapped-close-btn" aria-label="Close details">✕</button>
+        </div>
+      </div>
+
+      <div class="tapped-card-body">
+        <div class="tapped-grid">
+          <div class="tapped-grid-item">
+            <span class="tapped-label">Glide L/D</span>
+            <strong id="tapped-glide" class="tapped-val">4.8:1</strong>
+            <small id="tapped-drop" class="tapped-sub">-850m drop</small>
+          </div>
+          <div class="tapped-grid-item">
+            <span class="tapped-label">Reach Stop</span>
+            <strong id="tapped-reach" class="tapped-val">35m</strong>
+            <small id="tapped-dist" class="tapped-sub">4.2 km</small>
+          </div>
+          <div class="tapped-grid-item">
+            <span class="tapped-label">Total Trip</span>
+            <strong id="tapped-total" class="tapped-val">1h 34m</strong>
+            <small id="tapped-arr" class="tapped-sub">Arr 19:58</small>
+          </div>
+        </div>
+
+        <div id="tapped-legs" class="tapped-legs-text">
+          🕒 Departure 18:24 • Route Summary
+        </div>
+
+        <div class="card-links-row">
+          <a id="tapped-link-gmaps" class="card-link-btn gmaps" href="#" target="_blank" rel="noopener">
+            <span>🗺️ Google Maps</span>
+          </a>
+          <a id="tapped-link-sbb-app" class="card-link-btn sbb-app" href="#">
+            <span>📱 SBB App</span>
+          </a>
+          <a id="tapped-link-sbb-web" class="card-link-btn sbb" href="#" target="_blank" rel="noopener">
+            <span>🚆 SBB Web</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div id="toast" class="toast"></div>
   </div>
@@ -169,6 +219,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=4.2"></script>
+  <script type="module" src="js/app.js?v=4.3"></script>
 </body>
 </html>

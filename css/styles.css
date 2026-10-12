@@ -553,8 +553,10 @@ input:focus, select:focus {
 }
 
 .custom-stop-marker-container {
-  pointer-events: auto;
+  pointer-events: auto !important;
   overflow: visible !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
 }
 
 /* Minimalist Dual Pill Marker: Time + Glide only (No bulky boxes) */
@@ -562,11 +564,15 @@ input:focus, select:focus {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  cursor: pointer;
+  cursor: pointer !important;
+  pointer-events: auto !important;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: manipulation !important;
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.7));
   transition: transform 0.15s ease;
+  padding: 8px 10px;
+  margin: -8px -10px;
 }
 
 .stop-pill-marker:hover,
@@ -674,17 +680,45 @@ input:focus, select:focus {
   margin-top: 1px;
 }
 
-/* POPUP CARD */
+/* POPUP CARD & LEAFLET POPUP OVERRIDES */
+.leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+  min-width: 250px !important;
+  max-width: 320px !important;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: #f8fafc !important;
+  padding: 6px 8px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  z-index: 10;
+}
+
 .popup-card {
-  color: #0f172a;
-  min-width: 220px;
+  color: #f8fafc;
+  min-width: 240px;
   font-family: inherit;
 }
 
 .popup-header {
-  padding: 6px 8px;
-  border-radius: 6px 6px 0 0;
-  font-weight: 700;
+  padding: 8px 10px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -695,31 +729,197 @@ input:focus, select:focus {
 .popup-header.badge-unreachable { background: var(--color-unreachable); color: #fff; }
 
 .popup-body {
-  padding: 8px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
+  gap: 5px;
+  font-size: 0.82rem;
+  background: #0f172a;
 }
 
 .popup-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  color: #cbd5e1;
+}
+
+.popup-row span {
+  color: #94a3b8;
+}
+
+.popup-row strong {
+  color: #f8fafc;
 }
 
 .popup-row.highlight {
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  border-top: 1px solid #cbd5e1;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.86rem;
   margin-top: 4px;
+}
+
+.popup-row.highlight strong {
+  color: #38bdf8;
 }
 
 .popup-legs {
   margin-top: 4px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
   font-size: 0.75rem;
-  color: #475569;
+  color: #cbd5e1;
+}
+
+/* FLOATING DETAILS BOX FOR TAPPED STOP */
+.tapped-stop-card {
+  position: absolute;
+  bottom: 24px;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 14px;
+  right: 14px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(56, 189, 248, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.7);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  gap: 10px;
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 768px) {
+  .tapped-stop-card {
+    left: 16px;
+    right: auto;
+    width: 380px;
+    bottom: 24px;
+  }
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tapped-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tapped-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.tapped-rank-pill {
+  background: #38bdf8;
+  color: #0f172a;
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 6px;
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
+.tapped-stop-name {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tapped-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tapped-close-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #cbd5e1;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.tapped-close-btn:hover,
+.tapped-close-btn:active {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.tapped-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tapped-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.tapped-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.tapped-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.tapped-val {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-top: 1px;
+}
+
+.tapped-sub {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+}
+
+.tapped-legs-text {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 10px;
+  border-radius: 8px;
+  line-height: 1.3;
 }
 
 /* NON-INTRUSIVE FLOATING PROGRESS BANNER (Leaves map 100% visible & interactive) */
