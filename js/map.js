@@ -38,6 +38,23 @@ export const MapManager = {
       attribution: '&copy; OpenTopoMap contributors',
     });
 
+    // Satellite Imagery Layer (ESRI World Imagery + Reference Labels)
+    const satelliteTiles = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, GIS User Community',
+      }
+    );
+    const satelliteLabels = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 19,
+        attribution: '',
+      }
+    );
+    const satelliteLayer = L.layerGroup([satelliteTiles, satelliteLabels]);
+
     // Mapterhorn Hillshade Layer (GPU-rendered Terrarium DEM)
     let mapterhornLayer = null;
     if (typeof L.maplibreGL === 'function') {
@@ -88,11 +105,13 @@ export const MapManager = {
     if (mapterhornLayer) {
       mapterhornLayer.addTo(this.map);
       baseLayers['🏔️ Mapterhorn Terrain'] = mapterhornLayer;
+      baseLayers['🛰️ Satellite'] = satelliteLayer;
       baseLayers['Standard OSM'] = osmLayer;
       baseLayers['OpenTopoMap'] = topoLayer;
     } else {
       osmLayer.addTo(this.map);
       baseLayers['Standard OSM'] = osmLayer;
+      baseLayers['🛰️ Satellite'] = satelliteLayer;
       baseLayers['OpenTopoMap'] = topoLayer;
     }
 
