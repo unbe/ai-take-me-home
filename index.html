@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=4.8" />
+  <link rel="stylesheet" href="css/styles.css?v=4.9" />
 </head>
 <body>
   <div class="app-container">
@@ -47,65 +47,11 @@
     </div>
 
     <!-- INPUT & SETTINGS PANEL (Collapsible) -->
-    <section id="input-panel" class="input-panel" aria-label="Flight and destination settings">
+    <!-- SETTINGS PANEL (Collapsible) -->
+    <section id="input-panel" class="input-panel" aria-label="Settings">
       <div class="panel-header">
-        <h2 class="panel-title">Flight & Destination</h2>
+        <h2 class="panel-title">Settings</h2>
         <button id="btn-close-inputs" class="close-btn" aria-label="Close panel">&times;</button>
-      </div>
-
-      <!-- PRESETS -->
-      <div class="presets-group">
-        <span class="presets-label">Quick Presets</span>
-        <div class="presets-chips">
-          <button type="button" class="preset-chip" data-preset="steinhausen">Steinhausen (ZG) ➔ Zurich</button>
-          <button type="button" class="preset-chip" data-preset="interlaken">Interlaken (CH) ➔ Bern</button>
-          <button type="button" class="preset-chip" data-preset="annecy">Annecy (FR) ➔ Geneva</button>
-          <button type="button" class="preset-chip" data-preset="bassano">Bassano (IT) ➔ Venice</button>
-          <button type="button" class="preset-chip" data-preset="verbier">Verbier (CH) ➔ Lausanne</button>
-        </div>
-      </div>
-
-      <!-- PILOT COORDINATES -->
-      <div class="form-section">
-        <div class="form-label">
-          <span>My Position (Pilot)</span>
-          <button type="button" id="btn-pilot-gps" class="chip-edit-btn">Use GPS</button>
-        </div>
-        <div class="input-row">
-          <div class="field-group">
-            <span class="field-sublabel">Latitude</span>
-            <input type="number" id="input-pilot-lat" step="0.0001" value="46.6863" />
-          </div>
-          <div class="field-group">
-            <span class="field-sublabel">Longitude</span>
-            <input type="number" id="input-pilot-lon" step="0.0001" value="7.8632" />
-          </div>
-          <div class="field-group">
-            <span class="field-sublabel">Altitude (m MSL)</span>
-            <input type="number" id="input-pilot-alt" step="10" value="1600" />
-          </div>
-        </div>
-      </div>
-
-      <!-- DESTINATION COORDINATES -->
-      <div class="form-section">
-        <div class="form-label">
-          <span>Destination (Home / Safe Haven)</span>
-        </div>
-        <div class="field-group" style="margin-bottom: 6px;">
-          <span class="field-sublabel">Name / Label (optional)</span>
-          <input type="text" id="input-dest-name" placeholder="e.g. Bern, Zurich HB, Home LZ" value="Bern" />
-        </div>
-        <div class="input-row-2">
-          <div class="field-group">
-            <span class="field-sublabel">Latitude</span>
-            <input type="number" id="input-dest-lat" step="0.0001" value="46.9480" />
-          </div>
-          <div class="field-group">
-            <span class="field-sublabel">Longitude</span>
-            <input type="number" id="input-dest-lon" step="0.0001" value="7.4474" />
-          </div>
-        </div>
       </div>
 
       <!-- SEARCH & FLIGHT PARAMETERS -->
@@ -141,7 +87,7 @@
 
       <!-- SUBMIT BUTTON -->
       <button id="btn-calculate" class="btn-primary">
-        <span>⚡ Calculate Routes & Glides</span>
+        <span>⚡ Save Settings & Recalculate</span>
       </button>
     </section>
 
@@ -212,6 +158,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=4.8"></script>
+  <script type="module" src="js/app.js?v=4.9"></script>
 </body>
 </html>

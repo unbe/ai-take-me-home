@@ -101,12 +101,6 @@ const UI = {
   btnCloseTappedCard: document.getElementById('btn-close-tapped-card'),
 
   // Inputs
-  inputPilotLat: document.getElementById('input-pilot-lat'),
-  inputPilotLon: document.getElementById('input-pilot-lon'),
-  inputPilotAlt: document.getElementById('input-pilot-alt'),
-  inputDestName: document.getElementById('input-dest-name'),
-  inputDestLat: document.getElementById('input-dest-lat'),
-  inputDestLon: document.getElementById('input-dest-lon'),
   inputStopsCount: document.getElementById('input-stops-count'),
   inputSearchRadius: document.getElementById('input-search-radius'),
   inputSpeed: document.getElementById('input-speed'),
@@ -139,116 +133,147 @@ function setLoading(isLoading, text = 'Loading...') {
 }
 
 /**
+ * Update browser URL search params to reflect state for bookmarking
+ */
+function updateUrlFromState() {
+  const params = new URLSearchParams();
+
+  // Pilot position & altitude
+  if (isFinite(State.pilot.lat)) params.set('lat', State.pilot.lat.toFixed(5));
+  if (isFinite(State.pilot.lon)) params.set('lon', State.pilot.lon.toFixed(5));
+  if (isFinite(State.pilot.altM)) params.set('alt', Math.round(State.pilot.altM));
+
+  // Destination coordinates & name
+  if (isFinite(State.destination.lat)) params.set('destLat', State.destination.lat.toFixed(5));
+  if (isFinite(State.destination.lon)) params.set('destLon', State.destination.lon.toFixed(5));
+  if (State.destination.name) params.set('destName', State.destination.name);
+
+  // Settings from settings panel
+  params.set('radius', State.settings.searchRadiusKm);
+  params.set('stops', State.settings.stopsCount);
+  params.set('speed', State.settings.speedKmH);
+  params.set('buffer', State.settings.bufferMinutes);
+  params.set('glide', State.settings.maxGlideRatio);
+
+  const newUrl = `${window.location.pathname}?${params.toString()}`;
+  window.history.replaceState(null, '', newUrl);
+}
+
+/**
+ * Read state from URL search params (or hash) for bookmarking / deep-linking
+ */
+function parseStateFromUrl() {
+  const params = new URLSearchParams(window.location.search || window.location.hash.replace(/^#\??/, ''));
+  let pilotSetInUrl = false;
+
+  // Pilot position & altitude
+  const lat = params.get('lat') || params.get('pilotLat');
+  const lon = params.get('lon') || params.get('lng') || params.get('pilotLon');
+  const alt = params.get('alt') || params.get('pilotAlt');
+
+  if (lat !== null && lon !== null) {
+    const parsedLat = parseFloat(lat);
+    const parsedLon = parseFloat(lon);
+    if (!isNaN(parsedLat) && !isNaN(parsedLon)) {
+      State.pilot.lat = parsedLat;
+      State.pilot.lon = parsedLon;
+      pilotSetInUrl = true;
+    }
+  }
+
+  if (alt !== null) {
+    const parsedAlt = parseFloat(alt);
+    if (!isNaN(parsedAlt)) {
+      State.pilot.altM = Math.round(parsedAlt);
+      pilotSetInUrl = true;
+    }
+  }
+
+  // Destination coordinates & name
+  const destLat = params.get('destLat') || params.get('dest_lat');
+  const destLon = params.get('destLon') || params.get('dest_lon') || params.get('destLng');
+  const destName = params.get('destName') || params.get('dest_name') || params.get('dest');
+
+  if (destLat !== null && destLon !== null) {
+    const parsedDestLat = parseFloat(destLat);
+    const parsedDestLon = parseFloat(destLon);
+    if (!isNaN(parsedDestLat) && !isNaN(parsedDestLon)) {
+      State.destination.lat = parsedDestLat;
+      State.destination.lon = parsedDestLon;
+      State.destination.name = destName || `${parsedDestLat.toFixed(4)}, ${parsedDestLon.toFixed(4)}`;
+    }
+  } else if (destName) {
+    State.destination.name = destName;
+  }
+
+  // Settings from settings panel
+  if (params.has('radius')) {
+    const r = parseFloat(params.get('radius'));
+    if (!isNaN(r) && r > 0) State.settings.searchRadiusKm = r;
+  }
+  if (params.has('stops')) {
+    const s = parseInt(params.get('stops'), 10);
+    if (!isNaN(s) && s > 0) State.settings.stopsCount = s;
+  }
+  if (params.has('speed')) {
+    const sp = parseFloat(params.get('speed'));
+    if (!isNaN(sp) && sp > 0) State.settings.speedKmH = sp;
+  }
+  if (params.has('buffer')) {
+    const b = parseFloat(params.get('buffer'));
+    if (!isNaN(b) && b >= 0) State.settings.bufferMinutes = b;
+  }
+  if (params.has('glide')) {
+    const g = parseFloat(params.get('glide'));
+    if (!isNaN(g) && g > 0) State.settings.maxGlideRatio = g;
+  }
+
+  return { pilotSetInUrl };
+}
+
+/**
  * Sync UI input fields with internal state
  */
 function syncInputsFromState() {
-  UI.inputPilotLat.value = State.pilot.lat.toFixed(4);
-  UI.inputPilotLon.value = State.pilot.lon.toFixed(4);
-  UI.inputPilotAlt.value = Math.round(State.pilot.altM);
-  if (UI.inputDestName) UI.inputDestName.value = State.destination.name || '';
-  UI.inputDestLat.value = State.destination.lat.toFixed(4);
-  UI.inputDestLon.value = State.destination.lon.toFixed(4);
-  UI.inputStopsCount.value = State.settings.stopsCount;
-  UI.inputSearchRadius.value = State.settings.searchRadiusKm;
-  UI.inputSpeed.value = State.settings.speedKmH;
-  UI.inputBuffer.value = State.settings.bufferMinutes;
-  UI.inputGlideThreshold.value = State.settings.maxGlideRatio;
+  if (UI.inputStopsCount) UI.inputStopsCount.value = State.settings.stopsCount;
+  if (UI.inputSearchRadius) UI.inputSearchRadius.value = State.settings.searchRadiusKm;
+  if (UI.inputSpeed) UI.inputSpeed.value = State.settings.speedKmH;
+  if (UI.inputBuffer) UI.inputBuffer.value = State.settings.bufferMinutes;
+  if (UI.inputGlideThreshold) UI.inputGlideThreshold.value = State.settings.maxGlideRatio;
 
   // Header chip
-  UI.chipPilotText.textContent = `${Math.round(State.pilot.altM)}m (${State.pilot.lat.toFixed(2)}, ${State.pilot.lon.toFixed(2)})`;
-  UI.chipDestText.textContent = State.destination.name || `${State.destination.lat.toFixed(2)}, ${State.destination.lon.toFixed(2)}`;
+  if (UI.chipPilotText) {
+    UI.chipPilotText.textContent = `${Math.round(State.pilot.altM)}m (${State.pilot.lat.toFixed(2)}, ${State.pilot.lon.toFixed(2)})`;
+  }
+  if (UI.chipDestText) {
+    UI.chipDestText.textContent = State.destination.name || `${State.destination.lat.toFixed(2)}, ${State.destination.lon.toFixed(2)}`;
+  }
 }
 
 /**
  * Sync internal state from UI inputs
  */
 function syncStateFromInputs() {
-  State.pilot.lat = parseFloat(UI.inputPilotLat.value);
-  State.pilot.lon = parseFloat(UI.inputPilotLon.value);
-  State.pilot.altM = parseFloat(UI.inputPilotAlt.value) || 1000;
-
-  const newDestLat = parseFloat(UI.inputDestLat.value);
-  const newDestLon = parseFloat(UI.inputDestLon.value);
-  const typedName = UI.inputDestName ? UI.inputDestName.value.trim() : '';
-
-  // Check if destination coordinates changed from existing state
-  const coordsChanged =
-    Math.abs(newDestLat - State.destination.lat) > 0.0001 ||
-    Math.abs(newDestLon - State.destination.lon) > 0.0001;
-
-  State.destination.lat = newDestLat;
-  State.destination.lon = newDestLon;
-
-  // Check if new coordinates match any preset
-  const matchedPreset = Object.values(PRESETS).find(
-    p => Math.abs(p.dest.lat - newDestLat) < 0.005 && Math.abs(p.dest.lon - newDestLon) < 0.005
-  );
-
-  if (coordsChanged) {
-    if (matchedPreset) {
-      State.destination.name = matchedPreset.dest.name;
-      State.destination.uicRef = matchedPreset.dest.uicRef;
-      if (UI.inputDestName) UI.inputDestName.value = matchedPreset.dest.name;
-    } else {
-      // Changed to custom coordinates: do not retain previous preset name (e.g. Bern)
-      if (typedName && (!matchedPreset || typedName !== matchedPreset.dest.name) && typedName !== 'Bern') {
-        State.destination.name = typedName;
-      } else {
-        State.destination.name = `${newDestLat.toFixed(4)}, ${newDestLon.toFixed(4)}`;
-        if (UI.inputDestName) UI.inputDestName.value = State.destination.name;
-      }
-      State.destination.uicRef = null;
-    }
-  } else {
-    // Coordinates didn't change: check if user edited the name
-    if (typedName) {
-      State.destination.name = typedName;
-      State.destination.uicRef = (matchedPreset && matchedPreset.dest.name.toLowerCase() === typedName.toLowerCase())
-        ? matchedPreset.dest.uicRef
-        : null;
-    } else if (matchedPreset) {
-      State.destination.name = matchedPreset.dest.name;
-      State.destination.uicRef = matchedPreset.dest.uicRef;
-    } else {
-      State.destination.name = `${newDestLat.toFixed(4)}, ${newDestLon.toFixed(4)}`;
-      State.destination.uicRef = null;
-    }
-  }
-
-  State.settings.stopsCount = parseInt(UI.inputStopsCount.value, 10) || 15;
-  State.settings.searchRadiusKm = parseFloat(UI.inputSearchRadius.value) || 8;
-  State.settings.speedKmH = parseFloat(UI.inputSpeed.value) || 30;
-  State.settings.bufferMinutes = parseFloat(UI.inputBuffer.value) || 30;
-  State.settings.maxGlideRatio = parseFloat(UI.inputGlideThreshold.value) || 8.0;
-
-  UI.chipPilotText.textContent = `${Math.round(State.pilot.altM)}m`;
-  UI.chipDestText.textContent = State.destination.name || `${State.destination.lat.toFixed(2)}, ${State.destination.lon.toFixed(2)}`;
-}
-
-/**
- * Apply preset location
- */
-function applyPreset(presetKey) {
-  const p = PRESETS[presetKey];
-  if (!p) return;
-
-  State.pilot = { ...p.pilot };
-  State.destination = { ...p.dest };
-  State.settings.stopsCount = p.stopsCount;
-  State.settings.searchRadiusKm = p.radiusKm;
+  if (UI.inputStopsCount) State.settings.stopsCount = parseInt(UI.inputStopsCount.value, 10) || 15;
+  if (UI.inputSearchRadius) State.settings.searchRadiusKm = parseFloat(UI.inputSearchRadius.value) || 8;
+  if (UI.inputSpeed) State.settings.speedKmH = parseFloat(UI.inputSpeed.value) || 30;
+  if (UI.inputBuffer) State.settings.bufferMinutes = parseFloat(UI.inputBuffer.value) || 30;
+  if (UI.inputGlideThreshold) State.settings.maxGlideRatio = parseFloat(UI.inputGlideThreshold.value) || 8.0;
 
   syncInputsFromState();
-  closeInputPanel();
-  showToast(`Loaded preset: ${p.dest.name}`);
-  calculateRoutes();
+  updateUrlFromState();
 }
 
 /**
  * Geolocation GPS handler
  */
-function useCurrentLocation() {
+function useCurrentLocation(onFailure = null) {
   if (!navigator.geolocation) {
-    showToast('Geolocation is not supported by your browser');
+    if (typeof onFailure === 'function') {
+      onFailure();
+    } else {
+      showToast('Geolocation is not supported by your browser');
+    }
     return;
   }
 
@@ -260,11 +285,8 @@ function useCurrentLocation() {
 
       let altSource = 'GPS 3D';
       if (pos.coords.altitude !== null && pos.coords.altitude !== undefined && !isNaN(pos.coords.altitude)) {
-        // Direct GNSS satellite 3D altitude
         State.pilot.altM = Math.round(pos.coords.altitude);
       } else {
-        // Fallback: If device GPS hardware lacks 3D altitude or returns null,
-        // lookup ground elevation via Open-Meteo elevation API
         try {
           const elevs = await Elevation.getBatchElevations([{ lat: State.pilot.lat, lon: State.pilot.lon }]);
           if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
@@ -277,14 +299,19 @@ function useCurrentLocation() {
       }
 
       syncInputsFromState();
+      updateUrlFromState();
       showToast(`📍 GPS: ${State.pilot.lat.toFixed(4)}, ${State.pilot.lon.toFixed(4)} | Alt: ${State.pilot.altM}m (${altSource})`, 4000);
       calculateRoutes();
     },
     (err) => {
       console.warn('Geolocation error:', err);
-      showToast(`GPS Error: ${err.message}`);
+      if (typeof onFailure === 'function') {
+        onFailure();
+      } else {
+        showToast(`GPS Error: ${err.message}`);
+      }
     },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 }
 
@@ -557,49 +584,17 @@ function initEvents() {
   UI.btnOpenInputs.addEventListener('click', openInputPanel);
   UI.btnCloseInputs.addEventListener('click', closeInputPanel);
   UI.coordChip.addEventListener('click', openInputPanel);
-  UI.btnCalculate.addEventListener('click', calculateRoutes);
+  UI.btnCalculate.addEventListener('click', () => {
+    syncStateFromInputs();
+    closeInputPanel();
+    calculateRoutes();
+  });
   UI.fabRecalc.addEventListener('click', calculateRoutes);
-  UI.btnGps.addEventListener('click', useCurrentLocation);
-  UI.btnPilotGps.addEventListener('click', useCurrentLocation);
+  UI.btnGps.addEventListener('click', () => useCurrentLocation());
 
   if (UI.btnCloseTappedCard) {
     UI.btnCloseTappedCard.addEventListener('click', hideTappedStopCard);
   }
-
-  // Preset chips
-  document.querySelectorAll('.preset-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const presetKey = btn.dataset.preset;
-      applyPreset(presetKey);
-    });
-  });
-
-  // Dynamic update of destination name on coordinate input
-  const handleDestCoordInput = () => {
-    const lat = parseFloat(UI.inputDestLat.value);
-    const lon = parseFloat(UI.inputDestLon.value);
-    if (isNaN(lat) || isNaN(lon)) return;
-    const matched = Object.values(PRESETS).find(
-      p => Math.abs(p.dest.lat - lat) < 0.005 && Math.abs(p.dest.lon - lon) < 0.005
-    );
-    if (matched) {
-      if (UI.inputDestName) UI.inputDestName.value = matched.dest.name;
-    } else {
-      if (UI.inputDestName) UI.inputDestName.value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-    }
-  };
-  UI.inputDestLat.addEventListener('input', handleDestCoordInput);
-  UI.inputDestLon.addEventListener('input', handleDestCoordInput);
-
-  // Map click to set location (ONLY when input panel is open so browsing stops doesn't move pilot)
-  MapManager.onLocationSelected = (lat, lon) => {
-    if (UI.inputPanel.classList.contains('is-open')) {
-      State.pilot.lat = lat;
-      State.pilot.lon = lon;
-      syncInputsFromState();
-      showToast(`Updated pilot position to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
-    }
-  };
 
   // Map background tap: deselect stop and hide details card
   MapManager.onMapBackgroundClick = () => {
@@ -626,6 +621,7 @@ function initEvents() {
       console.warn('Could not query terrain elevation for new pilot position:', e);
     }
     syncInputsFromState();
+    updateUrlFromState();
     showToast(`🪂 Pilot position set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
     calculateRoutes();
   };
@@ -646,6 +642,7 @@ function initEvents() {
       State.destination.uicRef = null;
     }
     syncInputsFromState();
+    updateUrlFromState();
     showToast(`🏁 Destination set to ${State.destination.name}`);
     calculateRoutes();
   };
@@ -654,16 +651,41 @@ function initEvents() {
 /**
  * Bootstrap Application
  */
-function init() {
+async function init() {
   console.log('[Take Me Home] Initializing application...');
   MapManager.init('map');
-  syncInputsFromState();
   initEvents();
 
-  // Initial calculation with default preset (Interlaken)
-  setTimeout(() => {
-    calculateRoutes();
-  }, 400);
+  const { pilotSetInUrl } = parseStateFromUrl();
+  syncInputsFromState();
+  updateUrlFromState();
+
+  if (pilotSetInUrl) {
+    // Current position and altitude set in URL -> DO NOT query GPS!
+    console.log('[Take Me Home] Pilot position set in URL: skipping automatic GPS query');
+    if (!State.pilot.altM || isNaN(State.pilot.altM)) {
+      try {
+        const elevs = await Elevation.getBatchElevations([{ lat: State.pilot.lat, lon: State.pilot.lon }]);
+        if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
+          State.pilot.altM = Math.round(elevs[0]) + 300;
+        }
+      } catch (e) {
+        console.warn('Could not query terrain elevation for URL coordinates:', e);
+      }
+      syncInputsFromState();
+      updateUrlFromState();
+    }
+    setTimeout(() => {
+      calculateRoutes();
+    }, 300);
+  } else {
+    // Current position not set in URL -> query GPS, falling back to default if unavailable
+    useCurrentLocation(() => {
+      setTimeout(() => {
+        calculateRoutes();
+      }, 300);
+    });
+  }
 }
 
 // Kick off when DOM is ready

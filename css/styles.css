@@ -184,44 +184,6 @@ body {
   padding: 4px;
 }
 
-/* PRESETS SELECTOR */
-.presets-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.presets-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.presets-chips {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.preset-chip {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  padding: 6px 12px;
-  border-radius: 20px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.preset-chip:active {
-  background: var(--accent);
-  color: #000;
-}
-
 /* FORM FIELDS */
 .form-section {
   display: flex;
