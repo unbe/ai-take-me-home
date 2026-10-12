@@ -17,13 +17,12 @@ export const MapManager = {
   flightLines: {},
   selectedStopId: null,
 
-  init(containerId = 'map') {
+  init(containerId = 'map', initialLat = 46.6863, initialLon = 7.8632, initialZoom = 13) {
     if (this.map) return this.map;
 
-    // Default center (Alps paragliding hub: Interlaken)
     this.map = L.map(containerId, {
-      zoomControl: false, // We'll position zoom control carefully for mobile
-    }).setView([46.6863, 7.8632], 12);
+      zoomControl: false, // Position zoom control carefully for mobile
+    }).setView([initialLat, initialLon], initialZoom);
 
     // Zoom control in top right
     L.control.zoom({ position: 'topright' }).addTo(this.map);
@@ -547,5 +546,15 @@ export const MapManager = {
    */
   focusStop(lat, lon) {
     this.map.setView([lat, lon], 14, { animate: true });
+  },
+
+  /**
+   * Centers the map around the pilot position
+   */
+  centerOnPilot(lat, lon, zoom = 13) {
+    if (!this.map) return;
+    const currentZoom = this.map.getZoom();
+    const targetZoom = (currentZoom && currentZoom >= 11 && currentZoom <= 16) ? currentZoom : zoom;
+    this.map.setView([lat, lon], targetZoom, { animate: true });
   },
 };

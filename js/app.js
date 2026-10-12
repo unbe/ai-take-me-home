@@ -243,6 +243,10 @@ function useCurrentLocation(onFailure = null) {
       State.pilot.lat = pos.coords.latitude;
       State.pilot.lon = pos.coords.longitude;
 
+      // Center map around pilot position first
+      MapManager.centerOnPilot(State.pilot.lat, State.pilot.lon);
+      MapManager.setPilotMarker(State.pilot.lat, State.pilot.lon, State.pilot.altM);
+
       let altSource = 'GPS 3D';
       if (pos.coords.altitude !== null && pos.coords.altitude !== undefined && !isNaN(pos.coords.altitude)) {
         State.pilot.altM = Math.round(pos.coords.altitude);
@@ -390,9 +394,10 @@ async function calculateRoutes(options = {}) {
 
   const { pilot, destination, settings } = State;
 
-  // 1. Update map pins immediately with the new pilot and destination
+  // 1. Update map pins and center map around pilot position FIRST before querying
   MapManager.setPilotMarker(pilot.lat, pilot.lon, pilot.altM);
   MapManager.setDestinationMarker(destination.lat, destination.lon);
+  MapManager.centerOnPilot(pilot.lat, pilot.lon);
   MapManager.clearStops();
 
   try {
@@ -636,6 +641,8 @@ function initEvents() {
     hideTappedStopCard();
     State.pilot.lat = lat;
     State.pilot.lon = lon;
+    MapManager.centerOnPilot(lat, lon);
+    MapManager.setPilotMarker(lat, lon, State.pilot.altM);
     syncInputsFromState();
     updateUrlFromState();
     showToast(`🪂 Pilot position set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
@@ -666,12 +673,16 @@ function initEvents() {
  */
 async function init() {
   console.log('[Take Me Home] Initializing application...');
-  MapManager.init('map');
-  initEvents();
 
   const { pilotSetInUrl } = parseStateFromUrl();
   syncInputsFromState();
   updateUrlFromState();
+
+  // Center map around pilot position FIRST
+  MapManager.init('map', State.pilot.lat, State.pilot.lon, 13);
+  MapManager.setPilotMarker(State.pilot.lat, State.pilot.lon, State.pilot.altM);
+  MapManager.setDestinationMarker(State.destination.lat, State.destination.lon);
+  initEvents();
 
   if (pilotSetInUrl) {
     // Current position and altitude set in URL -> DO NOT query GPS!
