@@ -140,6 +140,15 @@ export const Geo = {
   },
 
   /**
+   * Checks whether a stop is physically within the glide horizon (reachable or marginal)
+   * @param {Object} stop
+   * @returns {boolean}
+   */
+  isWithinGlide(stop) {
+    return !!(stop && stop.feasibility && stop.feasibility.status !== 'unreachable');
+  },
+
+  /**
    * Format duration in minutes into clean readable string (e.g. "45m" or "1h 25m")
    */
   formatDurationMinutes(minutes) {

@@ -294,7 +294,9 @@ export const MapManager = {
     }
 
     // Confirmed timetable options (used to rank arrival/departure tiers)
-    const confirmedTransits = stops.filter(isConfirmed).map(s => s.transit);
+    const confirmedStops = stops.filter(isConfirmed);
+    const confirmedTransits = confirmedStops.map(s => s.transit);
+    const confirmedWithinTransits = confirmedStops.filter(s => Geo.isWithinGlide(s)).map(s => s.transit);
 
     stops.forEach((stop, index) => {
       const rank = index + 1;
@@ -323,7 +325,8 @@ export const MapManager = {
       if (isQuerying) {
         depClass = arrClass = 'tier-querying';
       } else if (hasLiveSchedule) {
-        ({ depClass, arrClass } = computeTiers(stop.transit, confirmedTransits));
+        const within = Geo.isWithinGlide(stop);
+        ({ depClass, arrClass } = computeTiers(stop.transit, confirmedTransits, confirmedWithinTransits, within));
       }
 
       // Blended background for the mode of transport icon (gradient from departure color to arrival color)

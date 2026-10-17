@@ -39,30 +39,55 @@ export function isConfirmed(stop) {
 
 /**
  * Computes departure/arrival tier classes for one stop.
+ * Stops outside the glide are informational and do not affect ratings of stops within the glide.
+ * If a stop beyond the glide is the best overall arrival, it is shown as blue (tier-best).
+ *
  * @param {{departureTime: string, arrivalTime: string}} transit
  * @param {Array<{departureTime: string, arrivalTime: string}>} confirmed - all confirmed options
+ * @param {Array<{departureTime: string, arrivalTime: string}>} [confirmedWithin] - confirmed options within glide
+ * @param {boolean} [isThisWithin=true] - whether this stop is within the glide horizon
  * @returns {{depClass: string, arrClass: string}}
  */
-export function computeTiers(transit, confirmed) {
+export function computeTiers(transit, confirmed, confirmedWithin = null, isThisWithin = true) {
   const none = { depClass: 'tier-none', arrClass: 'tier-none' };
   const depMs = toMs(transit.departureTime);
   const arrMs = toMs(transit.arrivalTime);
   if (isNaN(depMs) || isNaN(arrMs)) return none;
 
-  const options = confirmed
+  const allOptions = confirmed
     .map(t => ({ dep: toMs(t.departureTime), arr: toMs(t.arrivalTime) }))
     .filter(o => !isNaN(o.arr));
-  if (!options.length) return none;
+  if (!allOptions.length) return none;
 
-  const minArrMs = Math.min(...options.map(o => o.arr));
-  const arrRank = rankFor(Math.max(0, (arrMs - minArrMs) / MIN), ARR_LIMITS_MIN);
+  const withinOptions = (confirmedWithin && confirmedWithin.length > 0)
+    ? confirmedWithin
+        .map(t => ({ dep: toMs(t.departureTime), arr: toMs(t.arrivalTime) }))
+        .filter(o => !isNaN(o.arr))
+    : allOptions;
 
-  // Departure vs. the latest departure among options arriving at a similar time
-  const cohortDeps = options
-    .filter(o => o.arr <= arrMs + ARR_COHORT_WINDOW_MIN * MIN && !isNaN(o.dep))
-    .map(o => o.dep);
-  const maxDepMs = Math.max(depMs, ...cohortDeps);
-  const rawDepRank = rankFor(Math.max(0, (maxDepMs - depMs) / MIN), DEP_LIMITS_MIN);
+  // The baseline arrival is always the earliest arrival among options within the glide
+  const minWithinArrMs = Math.min(...withinOptions.map(o => o.arr));
+
+  let arrRank;
+  let rawDepRank;
+
+  if (!isThisWithin && arrMs <= minWithinArrMs) {
+    // If the stop beyond the glide is best, show it as blue (tier-best)
+    arrRank = 0;
+    rawDepRank = 0;
+  } else {
+    arrRank = rankFor(Math.max(0, (arrMs - minWithinArrMs) / MIN), ARR_LIMITS_MIN);
+
+    // Departure ranking:
+    // For stops within glide, the cohort is drawn ONLY from within-glide options so outside stops
+    // do not affect or penalize within-glide ratings.
+    const cohortPool = isThisWithin ? withinOptions : allOptions;
+    const cohortDeps = cohortPool
+      .filter(o => o.arr <= arrMs + ARR_COHORT_WINDOW_MIN * MIN && !isNaN(o.dep))
+      .map(o => o.dep);
+    const maxDepMs = cohortDeps.length > 0 ? Math.max(depMs, ...cohortDeps) : depMs;
+    rawDepRank = rankFor(Math.max(0, (maxDepMs - depMs) / MIN), DEP_LIMITS_MIN);
+  }
 
   return {
     arrClass: TIER_NAMES[arrRank],

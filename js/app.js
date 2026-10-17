@@ -592,7 +592,8 @@ async function calculateRoutes(options = {}) {
         stop.totalTripMinutes = Infinity;
       }
 
-      // Progressive sort: Confirmed live schedules first, ordered by total travel time;
+      // Progressive sort: Confirmed live schedules within glide first, ordered by total travel time;
+      // followed by confirmed live schedules beyond glide;
       // followed by remaining stops sorted by glide feasibility & distance.
       stops.sort((a, b) => {
         const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
@@ -600,6 +601,11 @@ async function calculateRoutes(options = {}) {
         if (aHas && !bHas) return -1;
         if (!aHas && bHas) return 1;
         if (aHas && bHas) {
+          const aWithin = Geo.isWithinGlide(a);
+          const bWithin = Geo.isWithinGlide(b);
+          // Don't let stops beyond the glide horizon win against stops within the glide
+          if (aWithin && !bWithin) return -1;
+          if (!aWithin && bWithin) return 1;
           if (a.totalTripMinutes !== b.totalTripMinutes) {
             return a.totalTripMinutes - b.totalTripMinutes;
           }
@@ -623,8 +629,9 @@ async function calculateRoutes(options = {}) {
     if (signal.aborted || calcId !== currentCalculationId) return;
 
     // 6. After initial plans are queried and best stop is identified,
-    // query 3 more stops that follow the direction of the best stop
-    const bestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
+    // query 3 more stops that follow the direction of the best stop (preferring within glide)
+    const bestStop = stops.find(s => Geo.isWithinGlide(s) && s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes))
+      || stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
     if (bestStop) {
       setLoading(true, `Finding 3 stops following direction of #1 (${bestStop.name})...`);
       const followingStops = await Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal, destination);
@@ -687,13 +694,18 @@ async function calculateRoutes(options = {}) {
               stop.totalTripMinutes = Infinity;
             }
 
-            // Progressive sort
+            // Progressive sort: within glide first, then beyond glide
             stops.sort((a, b) => {
               const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
               const bHas = b.transit && b.transit.hasSchedule && isFinite(b.totalTripMinutes);
               if (aHas && !bHas) return -1;
               if (!aHas && bHas) return 1;
               if (aHas && bHas) {
+                const aWithin = Geo.isWithinGlide(a);
+                const bWithin = Geo.isWithinGlide(b);
+                // Don't let stops beyond the glide horizon win against stops within the glide
+                if (aWithin && !bWithin) return -1;
+                if (!aWithin && bWithin) return 1;
                 if (a.totalTripMinutes !== b.totalTripMinutes) {
                   return a.totalTripMinutes - b.totalTripMinutes;
                 }
@@ -719,7 +731,8 @@ async function calculateRoutes(options = {}) {
 
     setLoading(false);
     const confirmedCount = stops.filter(s => s.transit && s.transit.hasSchedule).length;
-    const fastestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
+    const fastestStop = stops.find(s => Geo.isWithinGlide(s) && s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes))
+      || stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
     const fastestText = fastestStop ? ` Fastest: ${Geo.formatDurationMinutes(fastestStop.totalTripMinutes)} (${fastestStop.name})` : '';
     showToast(`Found ${stops.length} options (${confirmedCount} live timetables).${fastestText}`);
 

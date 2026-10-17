@@ -521,6 +521,97 @@ async function runTests() {
 
   console.log('Test 15: 16-hour transit availability limit: PASS');
 
+  // Test 16: Glide horizon sorting priority & tier rating isolation
+  // 16a: Check Geo.isWithinGlide
+  const reachableStop = { feasibility: { status: 'reachable' } };
+  const marginalStop = { feasibility: { status: 'marginal' } };
+  const unreachableStop = { feasibility: { status: 'unreachable' } };
+  if (!Geo.isWithinGlide(reachableStop) || !Geo.isWithinGlide(marginalStop) || Geo.isWithinGlide(unreachableStop)) {
+    throw new Error('Geo.isWithinGlide classification failed');
+  }
+
+  // 16b: Sorting - reachable stop (90 min) vs unreachable stop (60 min)
+  // Unreachable stop MUST NOT win over reachable stop
+  const testStops = [
+    {
+      id: 'unreachable_fast',
+      name: 'Unreachable Express Station',
+      feasibility: { status: 'unreachable' },
+      transit: { hasSchedule: true },
+      totalTripMinutes: 60,
+      distM: 5000,
+    },
+    {
+      id: 'reachable_regular',
+      name: 'Reachable Local Stop',
+      feasibility: { status: 'reachable' },
+      transit: { hasSchedule: true },
+      totalTripMinutes: 90,
+      distM: 1000,
+    },
+  ];
+
+  testStops.sort((a, b) => {
+    const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
+    const bHas = b.transit && b.transit.hasSchedule && isFinite(b.totalTripMinutes);
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    if (aHas && bHas) {
+      const aWithin = Geo.isWithinGlide(a);
+      const bWithin = Geo.isWithinGlide(b);
+      if (aWithin && !bWithin) return -1;
+      if (!aWithin && bWithin) return 1;
+      if (a.totalTripMinutes !== b.totalTripMinutes) {
+        return a.totalTripMinutes - b.totalTripMinutes;
+      }
+      return a.distM - b.distM;
+    }
+    return 0;
+  });
+
+  if (testStops[0].id !== 'reachable_regular') {
+    throw new Error(`Expected reachable stop to win #1, but got: ${testStops[0].id}`);
+  }
+
+  // 16c: Tier rating isolation
+  // Stop A (reachable, arr 12:00)
+  // Stop B (reachable, arr 12:10)
+  // Stop X (unreachable, arr 11:20 - 40 min earlier!)
+  // Stop Y (unreachable, arr 13:00 - 60 min later)
+  const stopA_transit = { departureTime: '2026-10-18T10:00:00Z', arrivalTime: '2026-10-18T12:00:00Z' };
+  const stopB_transit = { departureTime: '2026-10-18T10:10:00Z', arrivalTime: '2026-10-18T12:10:00Z' };
+  const stopX_transit = { departureTime: '2026-10-18T09:30:00Z', arrivalTime: '2026-10-18T11:20:00Z' };
+  const stopY_transit = { departureTime: '2026-10-18T11:00:00Z', arrivalTime: '2026-10-18T13:00:00Z' };
+
+  const allConfirmed = [stopA_transit, stopB_transit, stopX_transit, stopY_transit];
+  const withinConfirmed = [stopA_transit, stopB_transit];
+
+  // Stop X (beyond glide, but best overall) -> MUST be shown as blue (tier-best)
+  const tiersX = computeTiers(stopX_transit, allConfirmed, withinConfirmed, false);
+  if (tiersX.arrClass !== 'tier-best') {
+    throw new Error(`Expected beyond-glide best stop X to have blue arrClass, got: ${tiersX.arrClass}`);
+  }
+
+  // Stop A (best within glide) -> MUST be shown as blue (tier-best)
+  const tiersA = computeTiers(stopA_transit, allConfirmed, withinConfirmed, true);
+  if (tiersA.arrClass !== 'tier-best') {
+    throw new Error(`Expected within-glide best stop A to have blue arrClass, got: ${tiersA.arrClass}`);
+  }
+
+  // Stop B (within glide, 10 min after Stop A) -> MUST be blue (tier-best) because compared against Stop A (not Stop X!)
+  const tiersB = computeTiers(stopB_transit, allConfirmed, withinConfirmed, true);
+  if (tiersB.arrClass !== 'tier-best') {
+    throw new Error(`Expected stop B to be tier-best within glide, got: ${tiersB.arrClass} (dragged down by outside stop?)`);
+  }
+
+  // Stop Y (beyond glide, 60 min after best within glide) -> MUST NOT be blue
+  const tiersY = computeTiers(stopY_transit, allConfirmed, withinConfirmed, false);
+  if (tiersY.arrClass === 'tier-best') {
+    throw new Error(`Expected slow beyond-glide stop Y to not be tier-best, got: ${tiersY.arrClass}`);
+  }
+
+  console.log('Test 16: Glide horizon sorting priority & tier rating isolation: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

@@ -94,3 +94,10 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - However, routes in rural valleys without weekend service (e.g. Oberfrittenbach only running Monday morning) would otherwise return trips 32+ hours away.
   - To prevent long weekend waits from cluttering the rankings and appearing deceptively early on 24-hour clock faces, a strict 16-hour threshold marks them as unavailable.
 
+### G. Glide Horizon Priority & Rating Isolation
+- **Ranking Rule**: Stops beyond the glide horizon (`feasibility.status === 'unreachable'`) **never win** against stops within the glide (`reachable` or `marginal`). Confirmed stops within the glide always rank ahead of stops beyond the glide, regardless of whether a beyond-glide stop has a faster transit vehicle.
+- **Rating & Color Tier Rule**:
+  - Stops within the glide are compared **exclusively against the best stop within the glide**. Outside/unreachable stops are purely informational and cannot downgrade or penalize within-glide options to amber or red.
+  - If a stop beyond the glide horizon has the fastest overall arrival, it is highlighted as **blue** (`tier-best`), but does not displace `#1` or affect within-glide stop tiers.
+
+
