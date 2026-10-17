@@ -427,7 +427,7 @@ export const Geo = {
     if (!Array.isArray(stops) || stops.length === 0) return [];
     if (count <= 0) return [];
 
-    const maxPerPrefix = options.maxPerPrefix ?? 2;
+    const maxPerPrefix = options.maxPerPrefix ?? 1;
 
     // Rank candidate stops so that within any cluster, the most valuable stop is evaluated first
     // (e.g. train stations preferred over bus stops, reachable glide over uphill/unreachable)
@@ -448,6 +448,9 @@ export const Geo = {
       // Train stations are primary high-speed regional hubs connecting to multiple lines
       if (stop.type === 'train' || stop.type === 'station') {
         score -= 4000;
+      } else if (stop.type === 'ferry' || stop.type === 'cable_car') {
+        // Tourist ferries and funiculars/cable cars are secondary to scheduled regional buses and trains
+        score += 2000;
       }
 
       // Distance from pilot in meters

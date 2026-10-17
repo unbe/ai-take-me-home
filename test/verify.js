@@ -327,7 +327,7 @@ async function runTests() {
     throw new Error('Expected distinct train stations to NOT be detected as similar');
   }
 
-  // 12b: Sequential bus stops preservation - current and next stop of the bus must both be explored
+  // 12b: Corridor diversity stop selection - distinct lines/towns prioritized over multiple stops on same line
   const candidateStops = [
     { id: 's1', name: 'Interlaken Ost (Train)', type: 'train', lat: 46.6903, lon: 7.8691, distM: 1000 },
     { id: 's2', name: 'Interlaken Kursaal (Bus)', type: 'bus', lat: 46.6880, lon: 7.8650, distM: 1100 },
@@ -340,15 +340,21 @@ async function runTests() {
 
   const selectedStops = Geo.prioritizeDiverseStops(candidateStops, 4);
   const selectedNames = selectedStops.map(s => s.name);
-  console.log('Test 12b: Selected 4 stops (including current & next bus stop):', selectedNames);
+  console.log('Test 12b: Selected 4 stops (diverse lines + train hubs):', selectedNames);
 
-  // Both current stop (Kursaal) and next stop (Post) must be included
-  if (!selectedNames.includes('Interlaken Kursaal (Bus)') || !selectedNames.includes('Interlaken Post (Bus)')) {
-    throw new Error(`Current and next bus stop were not both kept: ${JSON.stringify(selectedNames)}`);
+  // Diverse lines (Kursaal and Unterseen) and train stations must be prioritized
+  if (!selectedNames.includes('Interlaken Kursaal (Bus)') || !selectedNames.includes('Unterseen Dorf (Bus)')) {
+    throw new Error(`Diverse corridor lines were not prioritized: ${JSON.stringify(selectedNames)}`);
   }
   // Duplicate platform (< 120m) must be pruned
   if (selectedNames.includes('Interlaken Post Platform 2 (Bus)')) {
     throw new Error(`Duplicate platform was not pruned: ${JSON.stringify(selectedNames)}`);
+  }
+
+  // Pass 2: when count is large enough, subsequent stops on the same line are retained
+  const sixStops = Geo.prioritizeDiverseStops(candidateStops, 6).map(s => s.name);
+  if (!sixStops.includes('Interlaken Post (Bus)')) {
+    throw new Error(`Pass 2 did not fill remaining slots with subsequent stops: ${JSON.stringify(sixStops)}`);
   }
 
   // 12c: Check minDistToOtherStopsM is attached and positive
