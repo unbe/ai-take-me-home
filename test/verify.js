@@ -297,75 +297,83 @@ async function runTests() {
 
   console.log('Test 11: Smart correlated departure & arrival tiers: PASS');
 
-  // Test 12: Spatial diversity stop prioritization (prioritizing stops further from other stops)
+  // Test 12: Similar stops deduplication & sequential bus stop preservation
+  // 12a: areSimilarStops tests:
+  // - Micro-distance stops (< 120m on same junction or opposite sides) are similar
+  const stopNorth = { name: 'Jungfraustrasse', type: 'bus', lat: 46.68523, lon: 7.85530 };
+  const stopSouth = { name: 'Zentralplatz', type: 'bus', lat: 46.68456, lon: 7.85519 };
+  if (!Geo.areSimilarStops(stopNorth, stopSouth)) {
+    throw new Error('Expected micro-distance stops (< 120m) to be detected as similar');
+  }
+
+  // - Station bus loop right outside train station (< 200m) is similar
+  const trainHub = { name: 'Interlaken Ost, Bahnhof', type: 'train', lat: 46.6903, lon: 7.8691 };
+  const busAtStation = { name: 'Interlaken Ost, Bahnhof', type: 'bus', lat: 46.6901, lon: 7.8688 };
+  if (!Geo.areSimilarStops(trainHub, busAtStation)) {
+    throw new Error('Expected bus stop directly at train station to be detected as similar');
+  }
+
+  // - Consecutive bus stops on the bus line (e.g. 270m apart) are NOT similar and MUST be explored
+  const busStopA = { name: 'Interlaken Kursaal', type: 'bus', lat: 46.6880, lon: 7.8650 };
+  const busStopB = { name: 'Interlaken Post', type: 'bus', lat: 46.6860, lon: 7.8630 };
+  if (Geo.areSimilarStops(busStopA, busStopB)) {
+    throw new Error('Expected consecutive bus stops to NOT be detected as similar');
+  }
+
+  // - Two distinct train stations (~1.5km apart) are NOT similar
+  const trainOst = { name: 'Interlaken Ost, Bahnhof', type: 'train', lat: 46.6903, lon: 7.8691 };
+  const trainWest = { name: 'Interlaken West, Bahnhof', type: 'train', lat: 46.6834, lon: 7.8507 };
+  if (Geo.areSimilarStops(trainOst, trainWest)) {
+    throw new Error('Expected distinct train stations to NOT be detected as similar');
+  }
+
+  // 12b: Sequential bus stops preservation - current and next stop of the bus must both be explored
   const candidateStops = [
     { id: 's1', name: 'Interlaken Ost (Train)', type: 'train', lat: 46.6903, lon: 7.8691, distM: 1000 },
     { id: 's2', name: 'Interlaken Kursaal (Bus)', type: 'bus', lat: 46.6880, lon: 7.8650, distM: 1100 },
     { id: 's3', name: 'Interlaken Post (Bus)', type: 'bus', lat: 46.6860, lon: 7.8630, distM: 1200 },
+    { id: 's3_dup', name: 'Interlaken Post Platform 2 (Bus)', type: 'bus', lat: 46.6861, lon: 7.8631, distM: 1210 },
     { id: 's4', name: 'Unterseen Dorf (Bus)', type: 'bus', lat: 46.6850, lon: 7.8420, distM: 1900 },
     { id: 's5', name: 'Bönigen See (Bus)', type: 'bus', lat: 46.6860, lon: 7.9050, distM: 2800 },
     { id: 's6', name: 'Wilderswil (Train)', type: 'train', lat: 46.6660, lon: 7.8670, distM: 3200 },
   ];
 
-  // 12a: With count = 4, stops in separate locations (Unterseen, Bönigen, Wilderswil) must be kept;
-  // redundant clustered stops (Kursaal, Post) in Interlaken center must be skipped.
-  const diverse4 = Geo.prioritizeDiverseStops(candidateStops, 4);
-  const diverse4Names = diverse4.map(s => s.name);
-  console.log('Test 12a: Selected 4 diverse stops:', diverse4Names);
+  const selectedStops = Geo.prioritizeDiverseStops(candidateStops, 4);
+  const selectedNames = selectedStops.map(s => s.name);
+  console.log('Test 12b: Selected 4 stops (including current & next bus stop):', selectedNames);
 
-  if (diverse4.length !== 4) {
-    throw new Error(`Expected 4 stops, got: ${diverse4.length}`);
+  // Both current stop (Kursaal) and next stop (Post) must be included
+  if (!selectedNames.includes('Interlaken Kursaal (Bus)') || !selectedNames.includes('Interlaken Post (Bus)')) {
+    throw new Error(`Current and next bus stop were not both kept: ${JSON.stringify(selectedNames)}`);
   }
-  if (!diverse4Names.includes('Interlaken Ost (Train)') ||
-      !diverse4Names.includes('Unterseen Dorf (Bus)') ||
-      !diverse4Names.includes('Bönigen See (Bus)') ||
-      !diverse4Names.includes('Wilderswil (Train)')) {
-    throw new Error(`Diverse stop selection failed to prioritize distant stops: ${JSON.stringify(diverse4Names)}`);
-  }
-  if (diverse4Names.includes('Interlaken Kursaal (Bus)') || diverse4Names.includes('Interlaken Post (Bus)')) {
-    throw new Error(`Redundant clustered stop was kept when distant stops were available: ${JSON.stringify(diverse4Names)}`);
-  }
-
-  // 12b: With count = 2, Unterseen (1.9km away) must be prioritized over Kursaal (1.1km) and Post (1.2km)
-  // because Kursaal & Post are within walking distance of Interlaken Ost.
-  const diverse2 = Geo.prioritizeDiverseStops(candidateStops, 2);
-  const diverse2Names = diverse2.map(s => s.name);
-  console.log('Test 12b: Selected 2 diverse stops:', diverse2Names);
-  if (!diverse2Names.includes('Interlaken Ost (Train)') || !diverse2Names.includes('Unterseen Dorf (Bus)')) {
-    throw new Error(`Expected [Interlaken Ost, Unterseen Dorf], got: ${JSON.stringify(diverse2Names)}`);
+  // Duplicate platform (< 120m) must be pruned
+  if (selectedNames.includes('Interlaken Post Platform 2 (Bus)')) {
+    throw new Error(`Duplicate platform was not pruned: ${JSON.stringify(selectedNames)}`);
   }
 
   // 12c: Check minDistToOtherStopsM is attached and positive
-  for (const s of diverse4) {
+  for (const s of selectedStops) {
     if (typeof s.minDistToOtherStopsM !== 'number' || s.minDistToOtherStopsM <= 0) {
       throw new Error(`Invalid minDistToOtherStopsM for ${s.name}: ${s.minDistToOtherStopsM}`);
     }
   }
 
-  // 12d: Fallback behavior - when all candidates are in a single cluster, still returns requested count
-  const clusteredOnly = candidateStops.slice(0, 3); // Ost, Kursaal, Post
-  const fallback3 = Geo.prioritizeDiverseStops(clusteredOnly, 3);
-  if (fallback3.length !== 3) {
-    throw new Error(`Fallback failed: expected 3 stops, got: ${fallback3.length}`);
-  }
-
-  // 12e: Train station retention - Interlaken Ost and Interlaken West (~1.5km apart) must both be included
+  // 12d: Train station retention - Interlaken Ost and Interlaken West (~1.5km apart) must both be included
   const candidatesWithWest = [
     { id: 'ost', name: 'Interlaken Ost, Bahnhof', type: 'train', lat: 46.6903, lon: 7.8691, distM: 630 },
     { id: 'west', name: 'Interlaken West, Bahnhof', type: 'train', lat: 46.6834, lon: 7.8507, distM: 912 },
     { id: 'kursaal', name: 'Interlaken Kursaal (Bus)', type: 'bus', lat: 46.6880, lon: 7.8650, distM: 700 },
     { id: 'post', name: 'Interlaken Post (Bus)', type: 'bus', lat: 46.6860, lon: 7.8630, distM: 800 },
     { id: 'wilderswil', name: 'Wilderswil (Train)', type: 'train', lat: 46.6660, lon: 7.8670, distM: 2300 },
-    { id: 'bonigen', name: 'Bönigen (Bus)', type: 'bus', lat: 46.6860, lon: 7.9050, distM: 2800 },
   ];
   const diverseWithWest = Geo.prioritizeDiverseStops(candidatesWithWest, 4);
   const diverseWithWestNames = diverseWithWest.map(s => s.name);
-  console.log('Test 12e: Selected stops including West:', diverseWithWestNames);
+  console.log('Test 12d: Selected stops including West:', diverseWithWestNames);
   if (!diverseWithWestNames.includes('Interlaken Ost, Bahnhof') || !diverseWithWestNames.includes('Interlaken West, Bahnhof')) {
     throw new Error(`Interlaken West was skipped: ${JSON.stringify(diverseWithWestNames)}`);
   }
 
-  // 12f: Train stations must never be pruned by nearby bus stops
+  // 12e: Train stations must never be pruned by nearby bus stops
   const busBeforeTrain = [
     { id: 'bus_close', name: 'Local Stop (Bus)', type: 'bus', lat: 46.6850, lon: 7.8510, distM: 200 },
     { id: 'train_hub', name: 'Interlaken West (Train)', type: 'train', lat: 46.6834, lon: 7.8507, distM: 350 },

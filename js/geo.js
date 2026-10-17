@@ -312,31 +312,83 @@ export const Geo = {
    * Prioritizes stops that are further from other stops, preventing redundant schedule queries
    * for clusters of stops within walking distance of each other.
    *
-   * Uses multi-tier spatial dispersion:
-   * 1. Higher tiers (e.g. >= 3000m, >= 2000m, >= 1200m) select geographically distinct stops
-   *    in different towns, valleys, and transit corridors.
-   * 2. Moderate tiers (>= 800m, >= 400m) select distinct neighborhoods outside immediate walking distance.
-   * 3. Fallback tier (0m) ensures all requested stop slots are filled if candidate stops are scarce.
-   *
-   * Within any cluster, higher-value stops (e.g. train stations, reachable glide ratio)
-   * are selected over local bus stops.
+  /**
+   * Checks if two transit stops are "similar" stops next to each other that should not both be explored.
+   * Prevents exploring duplicate platforms, micro-distance stops on the same intersection/square (< 120m),
+   * or station bus platforms right outside a train station (< 200m).
+   * Crucially, preserves genuinely distinct sequential stops (such as the current and next stop of a bus line,
+   * typically >= 150m apart with distinct names).
+   */
+  areSimilarStops(a, b, distM = null) {
+    if (!a || !b) return false;
+    const dM = distM !== null ? distM : this.haversineDistanceKm(a.lat, a.lon, b.lat, b.lon) * 1000;
+
+    // 1. Same official station identifier
+    if (a.uicRef && b.uicRef && a.uicRef === b.uicRef) {
+      return true;
+    }
+
+    // 2. Micro-distance (< 120m): physical proximity on same street/junction/square,
+    // opposite side of the road, or adjacent ferry piers.
+    // Distinct sequential bus stops are never < 120m apart.
+    if (dM <= 120) {
+      return true;
+    }
+
+    // Helper to clean stop name for comparison
+    const clean = (name) => {
+      if (!name) return '';
+      return name
+        .toLowerCase()
+        .replace(/\b(bahnhof|bhf|station|gare|stazione|steig\s+[a-z0-9]+|platform\s+[a-z0-9]+|gleis\s+[a-z0-9]+)\b/gi, '')
+        .replace(/[^a-z0-9äöüéèà]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const normA = clean(a.name || a.shortName);
+    const normB = clean(b.name || b.shortName);
+
+    // 3. Train station vs bus stop directly at the station (< 200m)
+    const isTrainBusPair = (a.type === 'train' && b.type === 'bus') || (a.type === 'bus' && b.type === 'train');
+    if (isTrainBusPair && dM <= 200) {
+      const busStop = a.type === 'bus' ? a : b;
+      const busName = (busStop.name || '').toLowerCase();
+      if (
+        busName.includes('bahnhof') ||
+        busName.includes('gare') ||
+        busName.includes('stazione') ||
+        (normA && normB && (normA.includes(normB) || normB.includes(normA)))
+      ) {
+        return true;
+      }
+    }
+
+    // 4. Same/similar name within station platform/stop area (< 250m)
+    // (e.g. "Ländte 1" vs "Ländte 2", or "Interlaken Ost" vs "Interlaken Ost, Bahnhof")
+    if (dM <= 250) {
+      if (normA && normB && (normA === normB || normA.includes(normB) || normB.includes(normA))) {
+        return true;
+      }
+    }
+
+    return false;
+  },
+
+  /**
+   * Filters candidate stops so that "Similar" stops next to each other (duplicate platforms,
+   * same intersection/square < 120m, or station bus stops < 200m) are not both explored,
+   * while genuinely distinct stops (such as the current and next stop of a bus line)
+   * are both explored.
    *
    * @param {Array} stops Candidate stops from Overpass or app state
    * @param {number} count Maximum number of stops to keep (default: 15)
-   * @param {Object} options Optional settings (tiers, minSeparationM, forceFilter)
-   * @returns {Array} Selected stops prioritized by spatial diversity
+   * @param {Object} options Optional settings (minSeparationM, forceFilter)
+   * @returns {Array} Selected stops prioritized by value and deduplicated of similar neighbors
    */
   prioritizeDiverseStops(stops, count = 15, options = {}) {
     if (!Array.isArray(stops) || stops.length === 0) return [];
     if (count <= 0) return [];
-
-    if (stops.length <= count && !options.forceFilter) {
-      return this._attachMinDistances([...stops].sort((a, b) => (a.distM || 0) - (b.distM || 0)));
-    }
-
-    const tiers = options.tiers || (options.minSeparationM
-      ? [options.minSeparationM, Math.round(options.minSeparationM / 2), 0]
-      : [800, 400, 0]);
 
     // Rank candidate stops so that within any cluster, the most valuable stop is evaluated first
     // (e.g. train stations preferred over bus stops, reachable glide over uphill/unreachable)
@@ -370,41 +422,29 @@ export const Geo = {
     const selected = [];
     const selectedIds = new Set();
 
-    for (const minSepM of tiers) {
+    for (const cand of sortedCandidates) {
       if (selected.length >= count) break;
+      const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
+      if (selectedIds.has(candId)) continue;
 
-      for (const cand of sortedCandidates) {
-        if (selected.length >= count) break;
-        const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
-        if (selectedIds.has(candId)) continue;
-
-        let tooClose = false;
-        if (minSepM > 0) {
-          for (const sel of selected) {
-            // A bus stop or local platform should never suppress a train station
-            if (cand.type === 'train' && sel.type !== 'train') {
-              continue;
-            }
-
-            let effectiveMinSep = minSepM;
-            // Distinct train stations should only prune each other if they are the same physical station complex
-            if (cand.type === 'train' && sel.type === 'train') {
-              effectiveMinSep = Math.min(minSepM, 500);
-            }
-
-            const sepKm = this.haversineDistanceKm(cand.lat, cand.lon, sel.lat, sel.lon);
-            const sepM = sepKm * 1000;
-            if (sepM < effectiveMinSep) {
-              tooClose = true;
-              break;
-            }
+      let similar = false;
+      for (const sel of selected) {
+        if (this.areSimilarStops(cand, sel)) {
+          similar = true;
+          break;
+        }
+        if (options.minSeparationM && options.minSeparationM > 0) {
+          const sepM = this.haversineDistanceKm(cand.lat, cand.lon, sel.lat, sel.lon) * 1000;
+          if (sepM < options.minSeparationM) {
+            similar = true;
+            break;
           }
         }
+      }
 
-        if (!tooClose) {
-          selected.push(cand);
-          selectedIds.add(candId);
-        }
+      if (!similar) {
+        selected.push(cand);
+        selectedIds.add(candId);
       }
     }
 
