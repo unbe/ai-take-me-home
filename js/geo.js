@@ -395,9 +395,39 @@ export const Geo = {
    * @param {Object} options Optional settings (minSeparationM, forceFilter)
    * @returns {Array} Selected stops prioritized by value and deduplicated of similar neighbors
    */
+  /**
+   * Extracts the corridor / line prefix from a stop's name (e.g. "Gohl, Houetershus" -> "gohl")
+   * @param {Object} stop
+   * @returns {string}
+   */
+  getCorridorKey(stop) {
+    const name = (stop.name || stop.shortName || '').trim();
+    if (!name) return 'unknown';
+    if (name.includes(',')) {
+      return name.split(',')[0].trim().toLowerCase();
+    }
+    const clean = name.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+    const parts = clean.split(/\s+/);
+    return parts[0].toLowerCase();
+  },
+
+  /**
+   * Intelligently selects diverse public transport stops for query:
+   * 1. Prioritizes railway stations (major multi-line regional hubs) over local bus stops.
+   * 2. Caps local bus/tram stops sharing the same line/corridor prefix (e.g. max 2 per prefix)
+   *    so a single local branch line cannot crowd out stations on other lines and valleys.
+   * 3. Prevents duplicate platforms within 120m, while preserving genuinely distinct sequential stops.
+   *
+   * @param {Array} stops Candidate stops from Overpass or app state
+   * @param {number} count Maximum number of stops to keep (default: 15)
+   * @param {Object} options Optional settings (minSeparationM, maxPerPrefix)
+   * @returns {Array} Selected stops prioritized by value and deduplicated of similar neighbors
+   */
   prioritizeDiverseStops(stops, count = 15, options = {}) {
     if (!Array.isArray(stops) || stops.length === 0) return [];
     if (count <= 0) return [];
+
+    const maxPerPrefix = options.maxPerPrefix ?? 2;
 
     // Rank candidate stops so that within any cluster, the most valuable stop is evaluated first
     // (e.g. train stations preferred over bus stops, reachable glide over uphill/unreachable)
@@ -415,9 +445,9 @@ export const Geo = {
         else score += 10000;
       }
 
-      // Train stations are primary hubs with faster regional transit
-      if (stop.type === 'train') {
-        score -= 800;
+      // Train stations are primary high-speed regional hubs connecting to multiple lines
+      if (stop.type === 'train' || stop.type === 'station') {
+        score -= 4000;
       }
 
       // Distance from pilot in meters
@@ -430,11 +460,22 @@ export const Geo = {
 
     const selected = [];
     const selectedIds = new Set();
+    const prefixCounts = new Map();
 
+    // Pass 1: Select diverse stops, capping local bus stops sharing the same line/corridor prefix
+    // to ensure other lines and regional train hubs are prioritized.
     for (const cand of sortedCandidates) {
       if (selected.length >= count) break;
       const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
       if (selectedIds.has(candId)) continue;
+
+      const isTrain = cand.type === 'train' || cand.type === 'station';
+      const key = this.getCorridorKey(cand);
+
+      // Bus/tram stops on the same line/prefix are capped to avoid crowding out other lines/towns
+      if (!isTrain && (prefixCounts.get(key) || 0) >= maxPerPrefix) {
+        continue;
+      }
 
       let similar = false;
       for (const sel of selected) {
@@ -454,6 +495,31 @@ export const Geo = {
       if (!similar) {
         selected.push(cand);
         selectedIds.add(candId);
+        if (!isTrain) {
+          prefixCounts.set(key, (prefixCounts.get(key) || 0) + 1);
+        }
+      }
+    }
+
+    // Pass 2: If quota is not yet filled (e.g. remote area with few lines), fill remaining slots
+    if (selected.length < count) {
+      for (const cand of sortedCandidates) {
+        if (selected.length >= count) break;
+        const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
+        if (selectedIds.has(candId)) continue;
+
+        let similar = false;
+        for (const sel of selected) {
+          if (this.areSimilarStops(cand, sel)) {
+            similar = true;
+            break;
+          }
+        }
+
+        if (!similar) {
+          selected.push(cand);
+          selectedIds.add(candId);
+        }
       }
     }
 

@@ -646,6 +646,45 @@ async function runTests() {
 
   console.log('Test 17: Down-corridor stops 1:17 glide ratio filter: PASS');
 
+  // Test 18: Line prefix diversity & railway hub prioritization
+  // 10 bus stops in Gohl valley (1.2km to 3.9km) + 1 major train station in Langnau (5.7km) + other corridors
+  const valleyCandidates = [
+    { id: 'g1', name: 'Gohl, Houetershus', type: 'bus', distM: 1220 },
+    { id: 'g2', name: 'Gohl, Gmünden', type: 'bus', distM: 1320 },
+    { id: 'g3', name: 'Gohl, Obeningohl', type: 'bus', distM: 1730 },
+    { id: 'g4', name: 'Gohl, Aeugsteren', type: 'bus', distM: 1950 },
+    { id: 'g5', name: 'Gohl, Mettlen', type: 'bus', distM: 2570 },
+    { id: 'g6', name: 'Gohl, Schulhaus', type: 'bus', distM: 2790 },
+    { id: 'g7', name: 'Gohl, Matten', type: 'bus', distM: 3070 },
+    { id: 'g8', name: 'Gohl, Dorf', type: 'bus', distM: 3330 },
+    { id: 'langnau', name: 'Langnau i.E., Bahnhof', type: 'train', distM: 5730 },
+    { id: 'trub', name: 'Trub, Löwenplatz', type: 'bus', distM: 4580 },
+    { id: 'barau', name: 'Bärau, Dorf', type: 'bus', distM: 4300 },
+    { id: 'wasen', name: 'Wasen i.E., Sparenegg', type: 'bus', distM: 4100 },
+  ];
+
+  const diverseSelection = Geo.prioritizeDiverseStops(valleyCandidates, 5);
+  const diverseNames = diverseSelection.map(s => s.name);
+  console.log('Test 18: Diverse selection result:', diverseNames);
+
+  // Train station at Langnau MUST be included
+  if (!diverseNames.includes('Langnau i.E., Bahnhof')) {
+    throw new Error(`Langnau train station was excluded by valley bus stops: ${JSON.stringify(diverseNames)}`);
+  }
+
+  // Gohl bus stops must be capped at 2 (not taking 4 or 5 slots)
+  const gohlCount = diverseNames.filter(n => n.startsWith('Gohl')).length;
+  if (gohlCount > 2) {
+    throw new Error(`Expected at most 2 Gohl bus stops, got ${gohlCount}: ${JSON.stringify(diverseNames)}`);
+  }
+
+  // Other distinct corridors (Wasen, Bärau, etc.) must be included because Gohl stopped at 2
+  if (!diverseNames.includes('Wasen i.E., Sparenegg') && !diverseNames.includes('Bärau, Dorf')) {
+    throw new Error(`Other diverse corridors were not included: ${JSON.stringify(diverseNames)}`);
+  }
+
+  console.log('Test 18: Line prefix diversity & railway hub prioritization: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

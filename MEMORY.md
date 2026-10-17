@@ -101,4 +101,12 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - Stops within the glide are compared **exclusively against the best stop within the glide**. Outside/unreachable stops are purely informational and cannot downgrade or penalize within-glide options to amber or red.
   - If a stop beyond the glide horizon has the fastest overall arrival, it is highlighted as **blue** (`tier-best`), but does not displace `#1` or affect within-glide stop tiers.
 
+### H. Line Diversity Quota & Train Hub Priority (`prioritizeDiverseStops`)
+- **The Problem**: A single rural valley directly below a pilot position (such as Gohl or Oberfrittenbach) may contain 15–20 small local bus stops spaced 200–400m apart. A naive proximity sort completely exhausts the candidate stop quota (e.g. `stops=15`) on a single low-frequency bus line, starving major regional rail hubs slightly further away (e.g. Langnau i.E. Bahnhof 5.7 km away with high-frequency S-Bahn & express trains) from ever being queried.
+- **The Solution**:
+  1. **Line/Corridor Prefix Quota**: Bus and tram stops sharing the same line/corridor prefix (e.g. `Gohl, ...` or `Oberfrittenbach, ...`) are capped at **max 2 stops** during initial candidate selection.
+  2. **Railway Station Weighting**: Railway stations (`type === 'train'` or `railway === 'station'/'halt'`) receive a -4,000m priority distance bonus and do not consume the local bus quota.
+  3. **Multi-Pass Fill**: If the quota is not reached after diverse allocation across valleys/lines, Pass 2 fills any remaining slots with the closest remaining candidates.
+
+
 
