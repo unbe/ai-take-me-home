@@ -329,23 +329,85 @@ out center;`;
   },
 
   /**
-   * Discovers stops that follow the direction from the pilot to the best stop.
-   * Useful for pilots who have altitude to spare and want to explore continuing down the corridor.
+   * Discovers stops that follow the direction of travel from the best stop.
+   * Prioritizes subsequent stops along the scheduled transit vehicle route leaving the best stop,
+   * followed by stops along the transit departure corridor towards the final destination.
    *
    * @param {Object} pilot Pilot position { lat, lon, altM }
-   * @param {Object} bestStop Identified best stop { id, lat, lon, distM, name }
+   * @param {Object} bestStop Identified best stop { id, lat, lon, distM, name, transit }
    * @param {number} count Number of stops to find (default: 3)
    * @param {Array} existingStops Stops already known/selected
    * @param {AbortSignal} [signal] Optional abort signal
+   * @param {Object} [destination] Final destination { lat, lon }
    * @returns {Promise<Array>} Array of candidate stops following the direction of bestStop
    */
-  async findFollowingStops(pilot, bestStop, count = 3, existingStops = [], signal = null) {
+  async findFollowingStops(pilot, bestStop, count = 3, existingStops = [], signal = null, destination = null) {
     throwIfAborted(signal);
     if (!pilot || !bestStop || count <= 0) return [];
 
-    const bestBearing = Geo.bearingDegrees(pilot.lat, pilot.lon, bestStop.lat, bestStop.lon);
     const existingIds = new Set(existingStops.map(s => String(s.id)));
     existingIds.add(String(bestStop.id));
+    const selected = [];
+
+    // 1. PRIMARY SOURCE: Subsequent stops directly along the scheduled transit route leaving bestStop
+    const firstTransit = bestStop.transit?.firstTransitLeg ||
+      (bestStop.transit?.legs || []).find(l => l.mode !== 'WALK');
+
+    if (firstTransit) {
+      const lineStops = [
+        ...(firstTransit.intermediateStops || []),
+        firstTransit.to,
+      ].filter(Boolean);
+
+      for (const s of lineStops) {
+        if (selected.length >= count) break;
+        const sName = s.name || '';
+        if (!sName) continue;
+        if (existingStops.some(e => e.name === sName || e.shortName === sName)) continue;
+
+        const distKm = Geo.haversineDistanceKm(pilot.lat, pilot.lon, s.lat, s.lon);
+        const distM = distKm * 1000;
+        const cand = {
+          id: s.id || `transit_${s.lat.toFixed(5)}_${s.lon.toFixed(5)}`,
+          name: sName,
+          shortName: sName,
+          lat: s.lat,
+          lon: s.lon,
+          type: (firstTransit.mode === 'RAIL' || firstTransit.icon === '🚆') ? 'train' : 'bus',
+          icon: firstTransit.icon || (firstTransit.mode === 'RAIL' ? '🚆' : '🚌'),
+          distKm,
+          distM,
+          bearing: Geo.bearingDegrees(pilot.lat, pilot.lon, s.lat, s.lon),
+        };
+
+        let similar = false;
+        for (const sel of [...existingStops, ...selected, bestStop]) {
+          if (Geo.areSimilarStops(cand, sel)) {
+            similar = true;
+            break;
+          }
+        }
+
+        if (!similar) {
+          selected.push(cand);
+          existingIds.add(String(cand.id));
+        }
+      }
+    }
+
+    if (selected.length >= count) {
+      return selected;
+    }
+
+    // 2. CORRIDOR EXTENSION: Stops from Overpass along the transit departure direction / towards destination
+    let directionBearing;
+    if (firstTransit && firstTransit.from && firstTransit.to && firstTransit.from.lat && firstTransit.to.lat) {
+      directionBearing = Geo.bearingDegrees(firstTransit.from.lat, firstTransit.from.lon, firstTransit.to.lat, firstTransit.to.lon);
+    } else if (destination) {
+      directionBearing = Geo.bearingDegrees(bestStop.lat, bestStop.lon, destination.lat, destination.lon);
+    } else {
+      directionBearing = Geo.bearingDegrees(pilot.lat, pilot.lon, bestStop.lat, bestStop.lon);
+    }
 
     let pool = (this.allDiscoveredStops || []).filter(s => !existingIds.has(String(s.id)));
 
@@ -353,26 +415,33 @@ out center;`;
       const matching = [];
       for (const cand of candidates) {
         if (existingIds.has(String(cand.id))) continue;
-        // Must be further from the pilot than the best stop
-        if (cand.distM <= bestStop.distM + 150) continue;
 
-        const candBearing = Geo.bearingDegrees(pilot.lat, pilot.lon, cand.lat, cand.lon);
-        let diff = Math.abs(candBearing - bestBearing);
+        // Must be in the forward direction from bestStop
+        const bearingFromBest = Geo.bearingDegrees(bestStop.lat, bestStop.lon, cand.lat, cand.lon);
+        let diff = Math.abs(bearingFromBest - directionBearing);
         if (diff > 180) diff = 360 - diff;
-        // Within a 50-degree corridor cone
         if (diff > 50) continue;
 
-        matching.push({ ...cand, angleDiff: diff });
+        const distFromBestM = Geo.haversineDistanceKm(bestStop.lat, bestStop.lon, cand.lat, cand.lon) * 1000;
+        if (distFromBestM <= 200) continue;
+
+        // If destination is available, verify it is heading towards destination
+        if (destination) {
+          const candToDest = Geo.haversineDistanceKm(cand.lat, cand.lon, destination.lat, destination.lon);
+          const bestToDest = Geo.haversineDistanceKm(bestStop.lat, bestStop.lon, destination.lat, destination.lon);
+          if (candToDest > bestToDest + 1.0) continue; // Skip stops moving away from destination
+        }
+
+        matching.push({ ...cand, angleDiff: diff, distFromBestM });
       }
 
-      // Sort by distance from pilot with priority bonus for train stations
+      // Sort by distance from best stop with train station bonus
       matching.sort((a, b) => {
-        const bonusA = a.type === 'train' ? -800 : 0;
-        const bonusB = b.type === 'train' ? -800 : 0;
-        return (a.distM + bonusA) - (b.distM + bonusB);
+        const bonusA = a.type === 'train' ? -1500 : 0;
+        const bonusB = b.type === 'train' ? -1500 : 0;
+        return (a.distFromBestM + bonusA) - (b.distFromBestM + bonusB);
       });
 
-      const selected = [];
       for (const cand of matching) {
         if (selected.length >= count) break;
         let similar = false;
@@ -384,17 +453,17 @@ out center;`;
         }
         if (!similar) {
           selected.push(cand);
+          existingIds.add(String(cand.id));
         }
       }
-      return selected;
     };
 
-    let selected = filterAndSelect(pool);
+    filterAndSelect(pool);
 
-    // If pool did not have enough stops in that corridor, query Overpass around the best stop
+    // If still need more stops, query Overpass around best stop
     if (selected.length < count) {
       throwIfAborted(signal);
-      console.log(`[Overpass] Found ${selected.length}/${count} corridor stops in pool; querying around best stop (${bestStop.name})...`);
+      console.log(`[Overpass] Found ${selected.length}/${count} corridor stops; querying around best stop (${bestStop.name})...`);
       const radiusM = 8000;
       const additionalStops = await this._queryAndParseStops(bestStop.lat, bestStop.lon, radiusM, signal);
       throwIfAborted(signal);
@@ -406,7 +475,7 @@ out center;`;
       }
 
       pool = [...pool, ...additionalStops];
-      selected = filterAndSelect(pool);
+      filterAndSelect(pool);
     }
 
     return selected;

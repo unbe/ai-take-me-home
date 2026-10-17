@@ -427,6 +427,55 @@ async function runTests() {
 
   console.log('Test 13: Query 3 stops following direction of best stop: PASS');
 
+  // Test 14: Transit-line route & destination corridor stop selection
+  // In Gohl (pilot at 46.97463, 7.83943, best stop Gohl Houetershus at 46.97239, 7.82379),
+  // pilot-to-stop bearing is 258° (West, dead-end valley), but destination is Zug (47.19151, 8.48387, bearing ~64° NE).
+  // The transit vehicle route departs along 40° towards Wasen i.E.
+  const gohlPilot = { lat: 46.97463, lon: 7.83943, altM: 1600 };
+  const gohlDestination = { lat: 47.19151, lon: 8.48387 };
+  const gohlBestStop = {
+    id: 'gohl_best',
+    name: 'Gohl, Houetershus',
+    lat: 46.97239,
+    lon: 7.82379,
+    distM: 1210,
+    distKm: 1.21,
+    transit: {
+      hasSchedule: true,
+      firstTransitLeg: {
+        mode: 'BUS',
+        from: { name: 'Gohl, Houetershus', lat: 46.97239, lon: 7.82379 },
+        to: { name: 'Wasen i.E., Abzw. Churzenei', lat: 47.0180, lon: 7.8870 },
+        intermediateStops: [
+          { name: 'Wasen i.E., Sparenegg', lat: 46.9980, lon: 7.8540 },
+          { name: 'Wasen i.E., Aeschberg', lat: 47.0060, lon: 7.8690 },
+        ]
+      }
+    }
+  };
+
+  const lineFollowing = await Overpass.findFollowingStops(
+    gohlPilot,
+    gohlBestStop,
+    3,
+    [gohlBestStop],
+    null,
+    gohlDestination
+  );
+  const lineFollowingNames = lineFollowing.map(s => s.name);
+  console.log('Test 14: Transit route following stops:', lineFollowingNames);
+
+  if (lineFollowing.length !== 3) {
+    throw new Error(`Expected 3 transit following stops, got ${lineFollowing.length}`);
+  }
+  if (!lineFollowingNames.includes('Wasen i.E., Sparenegg') ||
+      !lineFollowingNames.includes('Wasen i.E., Aeschberg') ||
+      !lineFollowingNames.includes('Wasen i.E., Abzw. Churzenei')) {
+    throw new Error(`Did not pick up scheduled transit route stops: ${JSON.stringify(lineFollowingNames)}`);
+  }
+
+  console.log('Test 14: Transit-line route & destination corridor stop selection: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

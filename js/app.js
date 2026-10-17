@@ -619,7 +619,7 @@ async function calculateRoutes(options = {}) {
     const bestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
     if (bestStop) {
       setLoading(true, `Finding 3 stops following direction of #1 (${bestStop.name})...`);
-      const followingStops = await Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal);
+      const followingStops = await Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal, destination);
 
       if (!signal.aborted && calcId === currentCalculationId && followingStops.length > 0) {
         setLoading(true, `Fetching terrain elevations for ${followingStops.length} corridor stops...`);

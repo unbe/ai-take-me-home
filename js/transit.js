@@ -111,6 +111,13 @@ export const Transit = {
         line,
         fromName: leg.from && leg.from.name ? leg.from.name : '',
         toName: leg.to && leg.to.name ? leg.to.name : '',
+        from: leg.from ? { name: leg.from.name || '', lat: leg.from.lat, lon: leg.from.lon } : null,
+        to: leg.to ? { name: leg.to.name || '', lat: leg.to.lat, lon: leg.to.lon } : null,
+        intermediateStops: (leg.intermediateStops || []).map(s => ({
+          name: s.name || '',
+          lat: s.lat,
+          lon: s.lon,
+        })),
         durationMin: legDurationMin,
         depTime,
         arrTime,
@@ -156,6 +163,7 @@ export const Transit = {
       transfers,
       destinationStopName: destinationStopName || null,
       legs,
+      firstTransitLeg,
       firstIcon,
       summary,
     };

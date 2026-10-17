@@ -64,11 +64,15 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   5. **Train Station Protection**: Distinct train stations (like *Interlaken Ost* and *Interlaken West*) are never pruned by bus stops or by each other unless within 500m.
 
 ### B. Down-Corridor Exploration (`findFollowingStops`)
-- **Rationale**: When a paraglider pilot is flying towards the best-ranked stop and has altitude to spare, landing at the first stop may not be optimal if gliding 3–8 km further down the valley/flight line reaches a faster express train station or bus connection.
+- **Rationale**: When a paraglider pilot is flying towards the best-ranked stop and has altitude to spare, landing at the first stop may not be optimal if gliding 3–8 km further down the valley/flight line reaches a faster express train station or a subsequent stop on the same transit line.
+- **Direction of Travel (Transit Route & Destination Vector vs. Pilot Vector)**:
+  - **Critical Trap**: Never use the `pilot -> bestStop` bearing as the corridor direction vector! If the best stop is slightly behind or lateral to the pilot (e.g. pilot at Gohl ridge, best stop in valley at Gohl Houetershus to the West), extending `pilot -> bestStop` points backwards into uninhabited dead-end valleys (e.g. Oberfrittenbach) yielding 35+ hour trip times.
+  - **Priority 1 (Scheduled Line Stops)**: The primary source for the 3 following stops is `firstTransitLeg.intermediateStops` and `firstTransitLeg.to` from the transit routing engine (e.g. `BUS 285` towards `Wasen i.E.`). These subsequent stops on the actual vehicle route save the pilot hundreds of minutes of travel time with zero timetable penalty.
+  - **Priority 2 (Corridor Extension)**: If fewer than 3 stops exist on the line, stops are queried from Overpass along the transit departure direction or directly towards the final destination (`Geo.bearingDegrees(bestStop, destination)`), explicitly filtering out any stops whose distance to the destination increases.
 - **Workflow**:
   1. Initial candidate stops are queried and ranked.
   2. Best stop (`#1`, fastest confirmed total trip) is identified.
-  3. `Overpass.findFollowingStops(pilot, bestStop, 3, stops)` queries candidate stops further along the bearing ($\theta \pm 50^\circ$, distance $> \text{bestStop.distM}$).
+  3. `Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal, destination)` discovers up to 3 candidate stops along the transit line or destination corridor.
   4. The 3 corridor stops have elevations and glide ratios calculated, are added to the map, and have transit schedules queried sequentially.
 
 ### C. Overpass API Mirroring & Headers
