@@ -349,6 +349,33 @@ async function runTests() {
     throw new Error(`Fallback failed: expected 3 stops, got: ${fallback3.length}`);
   }
 
+  // 12e: Train station retention - Interlaken Ost and Interlaken West (~1.5km apart) must both be included
+  const candidatesWithWest = [
+    { id: 'ost', name: 'Interlaken Ost, Bahnhof', type: 'train', lat: 46.6903, lon: 7.8691, distM: 630 },
+    { id: 'west', name: 'Interlaken West, Bahnhof', type: 'train', lat: 46.6834, lon: 7.8507, distM: 912 },
+    { id: 'kursaal', name: 'Interlaken Kursaal (Bus)', type: 'bus', lat: 46.6880, lon: 7.8650, distM: 700 },
+    { id: 'post', name: 'Interlaken Post (Bus)', type: 'bus', lat: 46.6860, lon: 7.8630, distM: 800 },
+    { id: 'wilderswil', name: 'Wilderswil (Train)', type: 'train', lat: 46.6660, lon: 7.8670, distM: 2300 },
+    { id: 'bonigen', name: 'Bönigen (Bus)', type: 'bus', lat: 46.6860, lon: 7.9050, distM: 2800 },
+  ];
+  const diverseWithWest = Geo.prioritizeDiverseStops(candidatesWithWest, 4);
+  const diverseWithWestNames = diverseWithWest.map(s => s.name);
+  console.log('Test 12e: Selected stops including West:', diverseWithWestNames);
+  if (!diverseWithWestNames.includes('Interlaken Ost, Bahnhof') || !diverseWithWestNames.includes('Interlaken West, Bahnhof')) {
+    throw new Error(`Interlaken West was skipped: ${JSON.stringify(diverseWithWestNames)}`);
+  }
+
+  // 12f: Train stations must never be pruned by nearby bus stops
+  const busBeforeTrain = [
+    { id: 'bus_close', name: 'Local Stop (Bus)', type: 'bus', lat: 46.6850, lon: 7.8510, distM: 200 },
+    { id: 'train_hub', name: 'Interlaken West (Train)', type: 'train', lat: 46.6834, lon: 7.8507, distM: 350 },
+  ];
+  const trainKept = Geo.prioritizeDiverseStops(busBeforeTrain, 2);
+  const trainKeptNames = trainKept.map(s => s.name);
+  if (!trainKeptNames.includes('Interlaken West (Train)')) {
+    throw new Error(`Train station was pruned by nearby bus stop: ${JSON.stringify(trainKeptNames)}`);
+  }
+
   console.log('Test 12: Spatial diversity stop prioritization: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');

@@ -335,8 +335,8 @@ export const Geo = {
     }
 
     const tiers = options.tiers || (options.minSeparationM
-      ? [options.minSeparationM, Math.round(options.minSeparationM / 2), Math.round(options.minSeparationM / 4), 0]
-      : [3000, 2000, 1200, 800, 400, 0]);
+      ? [options.minSeparationM, Math.round(options.minSeparationM / 2), 0]
+      : [800, 400, 0]);
 
     // Rank candidate stops so that within any cluster, the most valuable stop is evaluated first
     // (e.g. train stations preferred over bus stops, reachable glide over uphill/unreachable)
@@ -381,9 +381,20 @@ export const Geo = {
         let tooClose = false;
         if (minSepM > 0) {
           for (const sel of selected) {
+            // A bus stop or local platform should never suppress a train station
+            if (cand.type === 'train' && sel.type !== 'train') {
+              continue;
+            }
+
+            let effectiveMinSep = minSepM;
+            // Distinct train stations should only prune each other if they are the same physical station complex
+            if (cand.type === 'train' && sel.type === 'train') {
+              effectiveMinSep = Math.min(minSepM, 500);
+            }
+
             const sepKm = this.haversineDistanceKm(cand.lat, cand.lon, sel.lat, sel.lon);
             const sepM = sepKm * 1000;
-            if (sepM < minSepM) {
+            if (sepM < effectiveMinSep) {
               tooClose = true;
               break;
             }

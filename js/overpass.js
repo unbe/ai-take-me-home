@@ -41,6 +41,7 @@ out center;`;
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
+        'User-Agent': 'TakeMeHome/1.0 (https://github.com/artem/take-me-home)',
       },
       body: `data=${encodeURIComponent(body)}`,
     }, timeoutMs, signal);
