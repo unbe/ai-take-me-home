@@ -91,6 +91,13 @@ async function runTests() {
     throw new Error(`Google Maps URL should include departure_time parameter: ${gmapsUrl}`);
   }
 
+  // Verify local timezone compensation: 20:00 CEST (UTC+2) matches Google Maps native 1792353600
+  const testDateLocal = new Date('2026-10-18T20:00:00+02:00');
+  const gmapsLocalUrl = Geo.getGoogleMapsUrl(47.187, 7.701, 47.191, 8.483, testDateLocal);
+  if (!gmapsLocalUrl.includes('!8j1792353600')) {
+    throw new Error(`Expected !8j1792353600 for 20:00 local time, got: ${gmapsLocalUrl}`);
+  }
+
   // Ensure raw coordinates are never passed to SBB Web
   const webUrlRawCoords = Geo.getSbbWebUrl(
     { name: 'Oberiberg, Wandli' },

@@ -147,7 +147,7 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
 - **Use Case**: Allows pilots and developers to simulate landings at night, early morning, or weekends directly via URL without changing device clocks.
 
 ### J. Google Maps Start / Departure Time Format
-- **Format**: `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j${epochSec}!3e3?departure_time=${epochSec}`
+- **Format**: `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j${localEpochSec}!3e3?departure_time=${localEpochSec}`
 - **Why this format**:
   - The standard query parameter URL (`?api=1&travelmode=transit&departure_time=...`) is ignored by Google Maps web and mobile, always opening with "Leave now".
   - The exact working Google Maps protobuf path encoding is `!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j{TIMESTAMP}!3e3`, where:
@@ -155,7 +155,9 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
     - `!4m6!4m5`: Directions parameter containers
     - `!2m3!6e0!7e2!8j{TIMESTAMP}`: "Depart at" mode (`!6e0`), time modifier (`!7e2`), and 64-bit Unix timestamp in seconds (`!8j`)
     - `!3e3`: Transit travel mode
+  - **Timezone Offset Compensation (`!7e2`)**: The `!7e2` flag instructs Google Maps to interpret the `!8j` timestamp as seconds since 1970-01-01 in the *local* timezone rather than UTC. Therefore, JavaScript's UTC timestamp must be compensated via `d.getTime() - d.getTimezoneOffset() * 60000` so that the local wall-clock time (e.g. 20:00 CEST, UTC+2) matches Google Maps' rendered departure time without a 2-hour drift.
   - Fallback: If no departure date is supplied, falls back to `https://www.google.com/maps/dir/?api=1&origin=...&destination=...&travelmode=transit`.
+
 
 
 

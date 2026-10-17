@@ -349,8 +349,10 @@ export const Geo = {
         d = this.parseEffectiveTime ? this.parseEffectiveTime(departureDate) : new Date(departureDate);
       }
       if (d && !isNaN(d.getTime())) {
-        const epochSec = Math.floor(d.getTime() / 1000);
-        return `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j${epochSec}!3e3?departure_time=${epochSec}`;
+        // Google Maps !7e2 modifier treats the !8j timestamp as seconds since 1970-01-01 in LOCAL time.
+        // Subtract timezone offset so the local hour/minute matches the desired departure time.
+        const localEpochSec = Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 1000);
+        return `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j${localEpochSec}!3e3?departure_time=${localEpochSec}`;
       }
     }
     return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit`;
