@@ -612,6 +612,40 @@ async function runTests() {
 
   console.log('Test 16: Glide horizon sorting priority & tier rating isolation: PASS');
 
+  // Test 17: Down-corridor stops: filter anything beyond 1:17 glide (or uphill)
+  const candidateCorridorStops = [
+    { name: 'Corridor 1 (10:1)', distM: 5000, elevM: 500 }, // drop = 500m -> 10:1 (ok)
+    { name: 'Corridor 2 (16:1)', distM: 8000, elevM: 500 }, // drop = 500m -> 16:1 (ok)
+    { name: 'Corridor 3 (20:1)', distM: 10000, elevM: 500 }, // drop = 500m -> 20:1 (>17 -> drop)
+    { name: 'Corridor 4 (uphill)', distM: 3000, elevM: 1100 }, // drop = -100m (uphill -> drop)
+    { name: 'Corridor 5 (14:1)', distM: 7000, elevM: 500 }, // drop = 500m -> 14:1 (ok)
+  ];
+  const testPilotAlt = 1000;
+  const filteredCorridor = [];
+  for (const s of candidateCorridorStops) {
+    const g = Geo.calculateGlideRatio(s.distM, testPilotAlt, s.elevM);
+    s.glideRatio = g.ratio;
+    s.isUphill = g.isUphill;
+    if (s.isUphill || s.glideRatio === null || s.glideRatio > 17) {
+      continue;
+    }
+    filteredCorridor.push(s);
+    if (filteredCorridor.length >= 3) break;
+  }
+
+  const keptNames = filteredCorridor.map(s => s.name);
+  if (keptNames.length !== 3 ||
+      !keptNames.includes('Corridor 1 (10:1)') ||
+      !keptNames.includes('Corridor 2 (16:1)') ||
+      !keptNames.includes('Corridor 5 (14:1)')) {
+    throw new Error(`Unexpected down-corridor filtering: ${JSON.stringify(keptNames)}`);
+  }
+  if (keptNames.includes('Corridor 3 (20:1)') || keptNames.includes('Corridor 4 (uphill)')) {
+    throw new Error(`Stops beyond 1:17 glide were not dropped: ${JSON.stringify(keptNames)}`);
+  }
+
+  console.log('Test 17: Down-corridor stops 1:17 glide ratio filter: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

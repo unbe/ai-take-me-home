@@ -631,29 +631,36 @@ async function calculateRoutes(options = {}) {
     if (signal.aborted || calcId !== currentCalculationId) return;
 
     // 6. After initial plans are queried and best stop is identified,
-    // query 3 more stops that follow the direction of the best stop (preferring within glide)
+    // query up to 3 corridor stops that follow the direction of the best stop (within 1:17 glide)
     const bestStop = stops.find(s => Geo.isWithinGlide(s) && s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes))
       || stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
     if (bestStop) {
-      setLoading(true, `Finding 3 stops following direction of #1 (${bestStop.name})...`);
-      const followingStops = await Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal, destination);
+      setLoading(true, `Finding stops following direction of #1 (${bestStop.name})...`);
+      const candidateFollowing = await Overpass.findFollowingStops(pilot, bestStop, 6, stops, signal, destination);
 
-      if (!signal.aborted && calcId === currentCalculationId && followingStops.length > 0) {
-        setLoading(true, `Fetching terrain elevations for ${followingStops.length} corridor stops...`);
-        await Elevation.populateStopElevations(followingStops, signal);
+      if (!signal.aborted && calcId === currentCalculationId && candidateFollowing.length > 0) {
+        setLoading(true, `Fetching terrain elevations for corridor candidates...`);
+        await Elevation.populateStopElevations(candidateFollowing, signal);
 
         if (!signal.aborted && calcId === currentCalculationId) {
-          for (const stop of followingStops) {
+          const followingStops = [];
+          for (const stop of candidateFollowing) {
+            const glide = Geo.calculateGlideRatio(stop.distM, pilot.altM, stop.elevationM);
+            stop.glideRatio = glide.ratio;
+            stop.altDropM = glide.altDropM;
+            stop.isUphill = glide.isUphill;
+
+            // Down-corridor stops: don't show anything beyond 1:17 glide (or uphill)
+            if (stop.isUphill || stop.glideRatio === null || stop.glideRatio > 17) {
+              continue;
+            }
+
             stop.isFollowingBest = true;
             stop.reachTimeMinutes = Geo.calculateReachTimeMinutes(
               stop.distKm,
               settings.speedKmH,
               settings.bufferMinutes
             );
-            const glide = Geo.calculateGlideRatio(stop.distM, pilot.altM, stop.elevationM);
-            stop.glideRatio = glide.ratio;
-            stop.altDropM = glide.altDropM;
-            stop.isUphill = glide.isUphill;
             stop.feasibility = Geo.evaluateFeasibility(
               stop.glideRatio,
               stop.isUphill,
@@ -661,20 +668,23 @@ async function calculateRoutes(options = {}) {
               settings.maxGlideRatio + 2.0
             );
             stop.targetDepartureDate = new Date(now.getTime() + stop.reachTimeMinutes * 60000);
+            followingStops.push(stop);
+            if (followingStops.length >= 3) break;
           }
 
-          // Add newly discovered corridor stops to stops list
-          stops.push(...followingStops);
-          State.stops = stops;
-          renderStops(stops);
-
-          for (let i = 0; i < followingStops.length; i++) {
-            if (signal.aborted || calcId !== currentCalculationId) return;
-
-            const stop = followingStops[i];
-            setLoading(true, `Querying corridor timetable ${i + 1}/${followingStops.length}: ${stop.name}...`);
-            stop.isQuerying = true;
+          if (followingStops.length > 0) {
+            // Add newly discovered corridor stops to stops list
+            stops.push(...followingStops);
+            State.stops = stops;
             renderStops(stops);
+
+            for (let i = 0; i < followingStops.length; i++) {
+              if (signal.aborted || calcId !== currentCalculationId) return;
+
+              const stop = followingStops[i];
+              setLoading(true, `Querying corridor timetable ${i + 1}/${followingStops.length}: ${stop.name}...`);
+              stop.isQuerying = true;
+              renderStops(stops);
 
             stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate, 3000, signal);
             if (signal.aborted || calcId !== currentCalculationId) return;

@@ -69,11 +69,12 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - **Critical Trap**: Never use the `pilot -> bestStop` bearing as the corridor direction vector! If the best stop is slightly behind or lateral to the pilot (e.g. pilot at Gohl ridge, best stop in valley at Gohl Houetershus to the West), extending `pilot -> bestStop` points backwards into uninhabited dead-end valleys (e.g. Oberfrittenbach) yielding 35+ hour trip times.
   - **Priority 1 (Scheduled Line Stops)**: The primary source for the 3 following stops is `firstTransitLeg.intermediateStops` and `firstTransitLeg.to` from the transit routing engine (e.g. `BUS 285` towards `Wasen i.E.`). These subsequent stops on the actual vehicle route save the pilot hundreds of minutes of travel time with zero timetable penalty.
   - **Priority 2 (Corridor Extension)**: If fewer than 3 stops exist on the line, stops are queried from Overpass along the transit departure direction or directly towards the final destination (`Geo.bearingDegrees(bestStop, destination)`), explicitly filtering out any stops whose distance to the destination increases.
+  - **Glide Horizon Ceiling (1:17)**: Down-corridor stops beyond 1:17 glide ($L/D > 17$ or uphill) are **never shown**. If a corridor candidate cannot be reached within a 1:17 glide, it is pruned before rendering on the map or querying timetables.
 - **Workflow**:
   1. Initial candidate stops are queried and ranked.
-  2. Best stop (`#1`, fastest confirmed total trip) is identified.
-  3. `Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal, destination)` discovers up to 3 candidate stops along the transit line or destination corridor.
-  4. The 3 corridor stops have elevations and glide ratios calculated, are added to the map, and have transit schedules queried sequentially.
+  2. Best stop (`#1`, fastest confirmed total trip within glide) is identified.
+  3. `Overpass.findFollowingStops(pilot, bestStop, 6, stops, signal, destination)` discovers candidate stops along the transit line or destination corridor.
+  4. Candidate stops have terrain elevations and glide ratios calculated. Candidates beyond 1:17 glide ($L/D > 17$ or uphill) are discarded. Up to 3 viable stops within 1:17 glide are added to the map and have transit schedules queried sequentially.
 
 ### C. Overpass API Mirroring & Headers
 - **Mirror List**: `osm.ch`, `openstreetmap.fr`, `overpass-api.de`, `lz4.overpass-api.de`, `kumi.systems`.
