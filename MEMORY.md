@@ -146,17 +146,16 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
 - **Geo.parseEffectiveTime**: Seamlessly parses any of these formats into a JavaScript `Date` object, defaulting to `new Date()` if omitted.
 - **Use Case**: Allows pilots and developers to simulate landings at night, early morning, or weekends directly via URL without changing device clocks.
 
-### J. Google Maps Start / Departure Time Encoding
-- **The Issue**: Standard Google Maps URL schemes (`https://www.google.com/maps/dir/?api=1`) strip or ignore `&departure_time=`, causing Google Maps to default to "Leave now" (the current clock time on the user's phone or computer).
-- **The Solution**: Google Maps mobile apps and web interfaces natively parse the internal protobuf data parameters embedded in the path:
-  `/data=!4m7!4m6!2m3!6e0!7e2!8j{UNIX_TIMESTAMP}!3e3`
-  - `!3e3`: Transit travel mode
-  - `!6e0`: "Depart at" mode
-  - `!7e2`: Time calculation modifier
-  - `!8j{timestamp}`: 64-bit Unix timestamp in seconds
-- `Geo.getGoogleMapsUrl` generates:
-  `https://www.google.com/maps/dir/{originLat},{originLon}/{destLat},{destLon}/data=!4m7!4m6!2m3!6e0!7e2!8j{epochSec}!3e3?api=1&departure_time={epochSec}`
-  This ensures cross-platform compatibility: desktop browsers and mobile Google Maps apps open directly with the scheduled departure/start time pre-filled.
+### J. Google Maps Start / Departure Time Parameters
+- **Format**: `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit&departure_time=${epochSec}&time=${hh}:${min}`
+- **Reliability**: Uses the official Google Maps URLs API scheme (`https://www.google.com/maps/dir/?api=1`). Avoids brittle, undocumented protobuf path hacks (like `/data=!4m...`) which cause Google Maps web to fail calculating routes.
+- **Parameters**:
+  - `origin`: Coordinates of the transit stop (`${originLat},${originLon}`)
+  - `destination`: Destination coordinates (`${destLat},${destLon}`)
+  - `travelmode`: `transit`
+  - `departure_time`: Unix epoch timestamp in seconds
+  - `time`: HH:MM local 24-hour time of departure
+
 
 
 

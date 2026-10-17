@@ -82,13 +82,13 @@ async function runTests() {
     throw new Error(`SBB Mobile URL mismatch:\nExpected: ${expectedMobileUrl}\nGot:      ${mobileUrl}`);
   }
 
-  // Verify Google Maps URL includes departure_time and native data timestamp for transit
+  // Verify Google Maps URL includes departure_time and time parameters on standard URL
   const gmapsUrl = Geo.getGoogleMapsUrl(46.68, 7.85, 46.95, 7.44, new Date('2026-10-12T14:30:00Z'));
-  if (!gmapsUrl.includes('&departure_time=')) {
-    throw new Error('Google Maps URL should include departure_time parameter');
+  if (!gmapsUrl.includes('&departure_time=') || !gmapsUrl.includes('&time=')) {
+    throw new Error(`Google Maps URL should include departure_time and time parameters: ${gmapsUrl}`);
   }
-  if (!gmapsUrl.includes('!6e0!7e2!8j') || !gmapsUrl.includes('!3e3')) {
-    throw new Error(`Google Maps URL missing native transit departure protobuf payload: ${gmapsUrl}`);
+  if (!gmapsUrl.startsWith('https://www.google.com/maps/dir/?api=1')) {
+    throw new Error(`Google Maps URL should use standard api=1 base: ${gmapsUrl}`);
   }
 
   // Ensure raw coordinates are never passed to SBB Web
