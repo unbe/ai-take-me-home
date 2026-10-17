@@ -386,6 +386,47 @@ async function runTests() {
 
   console.log('Test 12: Spatial diversity stop prioritization: PASS');
 
+  // Test 13: Query stops that follow the direction of the best stop
+  const pilotPos = { lat: 46.6863, lon: 7.8632, altM: 1600 };
+  const bestStop = {
+    id: 's_best',
+    name: 'Interlaken Ost, Bahnhof',
+    type: 'train',
+    lat: 46.6903,
+    lon: 7.8691,
+    distM: 630,
+    distKm: 0.63,
+  };
+  // Pre-seed pool with candidate stops
+  Overpass.allDiscoveredStops = [
+    // Behind best stop or opposite direction (South-West)
+    { id: 'opp1', name: 'Wilderswil (Opposite)', type: 'train', lat: 46.6660, lon: 7.8670, distM: 2300, distKm: 2.3 },
+    // Along North-East corridor (following best stop bearing ~45°)
+    { id: 'fwd1', name: 'Ringgenberg (Train)', type: 'train', lat: 46.7020, lon: 7.8960, distM: 3100, distKm: 3.1 },
+    { id: 'fwd2', name: 'Niederried (Train)', type: 'train', lat: 46.7160, lon: 7.9300, distM: 6000, distKm: 6.0 },
+    { id: 'fwd3', name: 'Oberried (Train)', type: 'train', lat: 46.7320, lon: 7.9620, distM: 9000, distKm: 9.0 },
+    // Duplicate of fwd1 within 80m
+    { id: 'fwd1_dup', name: 'Ringgenberg Platform 2', type: 'train', lat: 46.7022, lon: 7.8962, distM: 3120, distKm: 3.12 },
+  ];
+
+  const following = await Overpass.findFollowingStops(pilotPos, bestStop, 3, [bestStop]);
+  const followingNames = following.map(s => s.name);
+  console.log('Test 13: 3 stops following direction of best stop:', followingNames);
+
+  if (following.length !== 3) {
+    throw new Error(`Expected 3 following stops, got ${following.length}`);
+  }
+  if (!followingNames.includes('Ringgenberg (Train)') ||
+      !followingNames.includes('Niederried (Train)') ||
+      !followingNames.includes('Oberried (Train)')) {
+    throw new Error(`Following stops did not match expected corridor stops: ${JSON.stringify(followingNames)}`);
+  }
+  if (followingNames.includes('Wilderswil (Opposite)') || followingNames.includes('Ringgenberg Platform 2')) {
+    throw new Error(`Invalid stop included in corridor results: ${JSON.stringify(followingNames)}`);
+  }
+
+  console.log('Test 13: Query 3 stops following direction of best stop: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

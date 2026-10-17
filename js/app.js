@@ -614,6 +614,94 @@ async function calculateRoutes(options = {}) {
 
     if (signal.aborted || calcId !== currentCalculationId) return;
 
+    // 6. After initial plans are queried and best stop is identified,
+    // query 3 more stops that follow the direction of the best stop
+    const bestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));
+    if (bestStop) {
+      setLoading(true, `Finding 3 stops following direction of #1 (${bestStop.name})...`);
+      const followingStops = await Overpass.findFollowingStops(pilot, bestStop, 3, stops, signal);
+
+      if (!signal.aborted && calcId === currentCalculationId && followingStops.length > 0) {
+        setLoading(true, `Fetching terrain elevations for ${followingStops.length} corridor stops...`);
+        await Elevation.populateStopElevations(followingStops, signal);
+
+        if (!signal.aborted && calcId === currentCalculationId) {
+          for (const stop of followingStops) {
+            stop.isFollowingBest = true;
+            stop.reachTimeMinutes = Geo.calculateReachTimeMinutes(
+              stop.distKm,
+              settings.speedKmH,
+              settings.bufferMinutes
+            );
+            const glide = Geo.calculateGlideRatio(stop.distM, pilot.altM, stop.elevationM);
+            stop.glideRatio = glide.ratio;
+            stop.altDropM = glide.altDropM;
+            stop.isUphill = glide.isUphill;
+            stop.feasibility = Geo.evaluateFeasibility(
+              stop.glideRatio,
+              stop.isUphill,
+              settings.maxGlideRatio - 0.5,
+              settings.maxGlideRatio + 2.0
+            );
+            stop.targetDepartureDate = new Date(now.getTime() + stop.reachTimeMinutes * 60000);
+          }
+
+          // Add newly discovered corridor stops to stops list
+          stops.push(...followingStops);
+          State.stops = stops;
+          renderStops(stops);
+
+          for (let i = 0; i < followingStops.length; i++) {
+            if (signal.aborted || calcId !== currentCalculationId) return;
+
+            const stop = followingStops[i];
+            setLoading(true, `Querying corridor timetable ${i + 1}/${followingStops.length}: ${stop.name}...`);
+            stop.isQuerying = true;
+            renderStops(stops);
+
+            stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate, 3000, signal);
+            if (signal.aborted || calcId !== currentCalculationId) return;
+
+            stop.isQuerying = false;
+
+            if (stop.transit && stop.transit.hasSchedule) {
+              stop.totalTripMinutes = Math.round(
+                stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
+              );
+            } else {
+              stop.totalTripMinutes = Infinity;
+            }
+
+            // Progressive sort
+            stops.sort((a, b) => {
+              const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
+              const bHas = b.transit && b.transit.hasSchedule && isFinite(b.totalTripMinutes);
+              if (aHas && !bHas) return -1;
+              if (!aHas && bHas) return 1;
+              if (aHas && bHas) {
+                if (a.totalTripMinutes !== b.totalTripMinutes) {
+                  return a.totalTripMinutes - b.totalTripMinutes;
+                }
+                return a.distM - b.distM;
+              }
+              const pDiff = priority[a.feasibility.status] - priority[b.feasibility.status];
+              if (pDiff !== 0) return pDiff;
+              return a.distM - b.distM;
+            });
+
+            renderStops(stops);
+
+            if (currentlyTappedStop && currentlyTappedStop.id === stop.id) {
+              const currentRank = stops.findIndex(s => s.id === stop.id) + 1;
+              showTappedStopCard(stop, currentRank);
+            }
+          }
+        }
+      }
+    }
+
+    if (signal.aborted || calcId !== currentCalculationId) return;
+
     setLoading(false);
     const confirmedCount = stops.filter(s => s.transit && s.transit.hasSchedule).length;
     const fastestStop = stops.find(s => s.transit && s.transit.hasSchedule && isFinite(s.totalTripMinutes));

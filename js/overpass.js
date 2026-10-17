@@ -289,6 +289,7 @@ out center;`;
       console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Checking radius ${currentRadiusM}m (need ${count} stops, max ${HARD_MAX_RADIUS_M}m)...`);
       stops = await this._queryAndParseStops(lat, lon, currentRadiusM, signal);
       throwIfAborted(signal);
+      this.allDiscoveredStops = stops;
       console.log(`[Overpass] Query ${attempt}/${MAX_QUERIES}: Found ${stops.length} unique stops`);
 
       // If already at or beyond the 20km hard ceiling, or on last attempt, return results
@@ -325,5 +326,89 @@ out center;`;
     }
 
     return Geo.prioritizeDiverseStops(stops, count);
+  },
+
+  /**
+   * Discovers stops that follow the direction from the pilot to the best stop.
+   * Useful for pilots who have altitude to spare and want to explore continuing down the corridor.
+   *
+   * @param {Object} pilot Pilot position { lat, lon, altM }
+   * @param {Object} bestStop Identified best stop { id, lat, lon, distM, name }
+   * @param {number} count Number of stops to find (default: 3)
+   * @param {Array} existingStops Stops already known/selected
+   * @param {AbortSignal} [signal] Optional abort signal
+   * @returns {Promise<Array>} Array of candidate stops following the direction of bestStop
+   */
+  async findFollowingStops(pilot, bestStop, count = 3, existingStops = [], signal = null) {
+    throwIfAborted(signal);
+    if (!pilot || !bestStop || count <= 0) return [];
+
+    const bestBearing = Geo.bearingDegrees(pilot.lat, pilot.lon, bestStop.lat, bestStop.lon);
+    const existingIds = new Set(existingStops.map(s => String(s.id)));
+    existingIds.add(String(bestStop.id));
+
+    let pool = (this.allDiscoveredStops || []).filter(s => !existingIds.has(String(s.id)));
+
+    const filterAndSelect = (candidates) => {
+      const matching = [];
+      for (const cand of candidates) {
+        if (existingIds.has(String(cand.id))) continue;
+        // Must be further from the pilot than the best stop
+        if (cand.distM <= bestStop.distM + 150) continue;
+
+        const candBearing = Geo.bearingDegrees(pilot.lat, pilot.lon, cand.lat, cand.lon);
+        let diff = Math.abs(candBearing - bestBearing);
+        if (diff > 180) diff = 360 - diff;
+        // Within a 50-degree corridor cone
+        if (diff > 50) continue;
+
+        matching.push({ ...cand, angleDiff: diff });
+      }
+
+      // Sort by distance from pilot with priority bonus for train stations
+      matching.sort((a, b) => {
+        const bonusA = a.type === 'train' ? -800 : 0;
+        const bonusB = b.type === 'train' ? -800 : 0;
+        return (a.distM + bonusA) - (b.distM + bonusB);
+      });
+
+      const selected = [];
+      for (const cand of matching) {
+        if (selected.length >= count) break;
+        let similar = false;
+        for (const sel of [...existingStops, ...selected, bestStop]) {
+          if (Geo.areSimilarStops(cand, sel)) {
+            similar = true;
+            break;
+          }
+        }
+        if (!similar) {
+          selected.push(cand);
+        }
+      }
+      return selected;
+    };
+
+    let selected = filterAndSelect(pool);
+
+    // If pool did not have enough stops in that corridor, query Overpass around the best stop
+    if (selected.length < count) {
+      throwIfAborted(signal);
+      console.log(`[Overpass] Found ${selected.length}/${count} corridor stops in pool; querying around best stop (${bestStop.name})...`);
+      const radiusM = 8000;
+      const additionalStops = await this._queryAndParseStops(bestStop.lat, bestStop.lon, radiusM, signal);
+      throwIfAborted(signal);
+
+      for (const s of additionalStops) {
+        s.distKm = Geo.haversineDistanceKm(pilot.lat, pilot.lon, s.lat, s.lon);
+        s.distM = s.distKm * 1000;
+        s.bearing = Geo.bearingDegrees(pilot.lat, pilot.lon, s.lat, s.lon);
+      }
+
+      pool = [...pool, ...additionalStops];
+      selected = filterAndSelect(pool);
+    }
+
+    return selected;
   },
 };
