@@ -136,9 +136,10 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   4. **Corridor Prefix Cap (`maxPerPrefix = 1`)**:
      - In Pass 1, bus/tram/ferry stops sharing the same line/corridor prefix (e.g. `Sundlauenen`, `Beatenberg`, `Leissigen`, `Gohl`) are capped at **1 stop** to avoid redundant queries of stops catching the same vehicle.
      - Major hubs (`combinedDensityScore >= 40` or railway stations) are exempt from prefix capping.
-  5. **Dynamic Alternate Recovery for No-Service Stops**:
+  5. **Dynamic Boundary Alternate Recovery for No-Service Stops**:
      - Whenever stops are pruned by `maxPerPrefix`, their candidate objects are retained in `stop.prunedAlternates`.
-     - During progressive transit querying, if a corridor's remaining stop turns out to have **no service** (`!transit.hasSchedule || totalTripMinutes === Infinity`), its pruned alternates are automatically re-added to the stop list and their timetables queried. This prevents missing viable transit from a valley just because the first stop checked was out of service.
+     - During progressive transit querying, if a corridor's remaining stop turns out to have **no service** (`!transit.hasSchedule || totalTripMinutes === Infinity`), its pruned alternates are re-evaluated.
+     - **Cluster Boundary Rule (`Geo.selectClusterBoundaryAlternates`)**: To prevent overwhelming the timetable engine with too many requests when a valley has no service, the app does **not** re-add all pruned stops. Instead, it re-adds **only the closest and the furthest stop in the cluster** relative to the pilot (at most 2 candidates). This tests both ends of the corridor (minimum reach effort and maximum valley penetration/junction) while keeping network overhead minimal.
 
 ### I. Time Simulation Parameter (`time`, `fakeTime`, `datetime`)
 - **URL Parameter**: `time=HH:MM` (e.g. `time=14:30`), ISO 8601 string (e.g. `datetime=2026-10-18T23:30:00`), or Unix epoch timestamp (`time=1776510000`).

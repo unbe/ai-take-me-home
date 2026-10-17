@@ -624,11 +624,14 @@ async function calculateRoutes(options = {}) {
         const remainingInCorridor = stops.filter(s => s.corridorKey === stop.corridorKey && s !== stop);
         const hasActiveCandidate = remainingInCorridor.some(s => s.transit === undefined || (s.transit?.hasSchedule && isFinite(s.totalTripMinutes)));
         if (!hasActiveCandidate && Array.isArray(stop.prunedAlternates) && stop.prunedAlternates.length > 0) {
-          const toAdd = stop.prunedAlternates.filter(p => !stops.some(s => s.id === p.id));
+          const availableAlternates = stop.prunedAlternates.filter(p => !stops.some(s => s.id === p.id));
           stop.prunedAlternates = []; // consume so we do not re-add repeatedly
 
+          // Avoid querying too many alternates: add back only the closest and furthest in the cluster
+          const toAdd = Geo.selectClusterBoundaryAlternates(availableAlternates);
+
           if (toAdd.length > 0) {
-            console.log(`[App] Stop ${stop.name} has no service. Re-adding ${toAdd.length} pruned stops for corridor '${stop.corridorKey}':`, toAdd.map(a => a.name));
+            console.log(`[App] Stop ${stop.name} has no service. Re-adding ${toAdd.length} boundary stops for corridor '${stop.corridorKey}' (closest & furthest):`, toAdd.map(a => `${a.name} (${a.distM}m)`));
             // Ensure terrain elevation is populated
             const missingElevation = toAdd.filter(s => typeof s.elevationM !== 'number');
             if (missingElevation.length > 0) {

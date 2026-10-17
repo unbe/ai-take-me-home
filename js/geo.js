@@ -603,6 +603,33 @@ export const Geo = {
   },
 
   /**
+   * When re-adding pruned stops for a cluster whose surviving stop had no service,
+   * avoid querying too many candidates by returning only the closest and furthest stops in the cluster.
+   *
+   * @param {Array} alternates Candidate stops pruned from this cluster
+   * @returns {Array} At most 2 stops (closest and furthest by distance)
+   */
+  selectClusterBoundaryAlternates(alternates) {
+    if (!Array.isArray(alternates) || alternates.length === 0) return [];
+    if (alternates.length <= 2) return [...alternates];
+
+    const sorted = [...alternates].sort((a, b) => {
+      const distA = a.distM !== undefined ? a.distM : (a.distKm ? a.distKm * 1000 : 0);
+      const distB = b.distM !== undefined ? b.distM : (b.distKm ? b.distKm * 1000 : 0);
+      return distA - distB;
+    });
+
+    const closest = sorted[0];
+    const furthest = sorted[sorted.length - 1];
+    const closestId = closest.id ?? `${closest.lat},${closest.lon}`;
+    const furthestId = furthest.id ?? `${furthest.lat},${furthest.lon}`;
+    if (closestId === furthestId) {
+      return [closest];
+    }
+    return [closest, furthest];
+  },
+
+  /**
    * Helper to compute each stop's minimum distance to any other stop in the selected set
    */
   _attachMinDistances(stops) {

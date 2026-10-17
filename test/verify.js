@@ -691,11 +691,13 @@ async function runTests() {
 
   console.log('Test 18: Line prefix diversity & railway hub prioritization: PASS');
 
-  // Test 19: Hub prioritization and pruned alternates tracking
+  // Test 19: Hub prioritization and boundary pruned alternates tracking
   const hubCandidates = [
     { id: 'b1', name: 'Sundlauenen, Geisskilche', type: 'bus', distM: 950 },
     { id: 'b2', name: 'Sundlauenen, Balmholz', type: 'bus', distM: 1060 },
+    { id: 'b2_mid', name: 'Sundlauenen, MidStop', type: 'bus', distM: 1500 },
     { id: 'b3', name: 'Sundlauenen, Pilgerweg', type: 'bus', distM: 1930 },
+    { id: 'b3_far', name: 'Sundlauenen, FarEnd', type: 'bus', distM: 3200 },
     { id: 'b4', name: 'Merligen, Nastel', type: 'bus', distM: 1200 },
     { id: 'spiez', name: 'Spiez, Bahnhof', type: 'train', tags: { railway: 'station' }, distM: 6840 },
   ];
@@ -709,34 +711,48 @@ async function runTests() {
     throw new Error(`Major hub Spiez Bahnhof was not selected: ${JSON.stringify(hubNames)}`);
   }
 
-  // Sundlauenen Geisskilche should have Balmholz and Pilgerweg in prunedAlternates
+  // Sundlauenen Geisskilche should have Balmholz, MidStop, Pilgerweg, and FarEnd in prunedAlternates
   const sundlauenenStop = hubResult.find(s => s.name.startsWith('Sundlauenen'));
-  if (!sundlauenenStop || !Array.isArray(sundlauenenStop.prunedAlternates) || sundlauenenStop.prunedAlternates.length < 2) {
+  if (!sundlauenenStop || !Array.isArray(sundlauenenStop.prunedAlternates) || sundlauenenStop.prunedAlternates.length < 4) {
     throw new Error(`Pruned alternates not properly attached to Sundlauenen: ${JSON.stringify(sundlauenenStop?.prunedAlternates)}`);
   }
-  const altNames = sundlauenenStop.prunedAlternates.map(a => a.name);
-  if (!altNames.includes('Sundlauenen, Balmholz') || !altNames.includes('Sundlauenen, Pilgerweg')) {
-    throw new Error(`Expected Balmholz and Pilgerweg in pruned alternates: ${JSON.stringify(altNames)}`);
+
+  // Unit check Geo.selectClusterBoundaryAlternates
+  const testAlts = [
+    { id: '1', distM: 2000 },
+    { id: '2', distM: 1000 },
+    { id: '3', distM: 5000 },
+    { id: '4', distM: 3000 },
+  ];
+  const boundaries = Geo.selectClusterBoundaryAlternates(testAlts);
+  if (boundaries.length !== 2 || boundaries[0].id !== '2' || boundaries[1].id !== '3') {
+    throw new Error(`selectClusterBoundaryAlternates did not pick closest (1000m) and furthest (5000m): ${JSON.stringify(boundaries)}`);
   }
 
-  // Simulate Sundlauenen Geisskilche has no service: pruned alternates are re-added
+  // Simulate Sundlauenen Geisskilche has no service: boundary alternates (closest & furthest only) are re-added
   sundlauenenStop.transit = { hasSchedule: false, success: false };
   sundlauenenStop.totalTripMinutes = Infinity;
 
   const remainingInCorridor = hubResult.filter(s => s.corridorKey === sundlauenenStop.corridorKey && s !== sundlauenenStop);
   const hasActiveCandidate = remainingInCorridor.some(s => s.transit === undefined || (s.transit?.hasSchedule && isFinite(s.totalTripMinutes)));
   if (!hasActiveCandidate && sundlauenenStop.prunedAlternates?.length > 0) {
-    const toAdd = sundlauenenStop.prunedAlternates.filter(p => !hubResult.some(s => s.id === p.id));
+    const available = sundlauenenStop.prunedAlternates.filter(p => !hubResult.some(s => s.id === p.id));
+    const toAdd = Geo.selectClusterBoundaryAlternates(available);
     sundlauenenStop.prunedAlternates = [];
     hubResult.push(...toAdd);
   }
 
   const recoveredNames = hubResult.map(s => s.name);
-  if (!recoveredNames.includes('Sundlauenen, Balmholz') || !recoveredNames.includes('Sundlauenen, Pilgerweg')) {
-    throw new Error(`Pruned alternates were not recovered after no-service detection: ${JSON.stringify(recoveredNames)}`);
+  // Must include Balmholz (closest, 1060m) and FarEnd (furthest, 3200m)
+  if (!recoveredNames.includes('Sundlauenen, Balmholz') || !recoveredNames.includes('Sundlauenen, FarEnd')) {
+    throw new Error(`Boundary alternates were not recovered after no-service detection: ${JSON.stringify(recoveredNames)}`);
+  }
+  // Must NOT include the intermediate stops (MidStop, Pilgerweg) to prevent querying too many stops
+  if (recoveredNames.includes('Sundlauenen, MidStop') || recoveredNames.includes('Sundlauenen, Pilgerweg')) {
+    throw new Error(`Intermediate stops should have been skipped, but found in recovered: ${JSON.stringify(recoveredNames)}`);
   }
 
-  console.log('Test 19: Hub prioritization and pruned alternates tracking: PASS');
+  console.log('Test 19: Hub prioritization and boundary alternates recovery: PASS');
 
   // Test 20: Effective time parsing & combined density score prioritization
   // 20a: parseEffectiveTime variations
