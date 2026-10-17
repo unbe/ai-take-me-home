@@ -27,6 +27,7 @@ const State = {
     speedKmH: 30,
     bufferMinutes: 30,
     maxGlideRatio: 8.0,
+    fakeTime: null,
   },
   stops: [],
   isCalculating: false,
@@ -121,6 +122,9 @@ function updateUrlFromState() {
   params.set('speed', State.settings.speedKmH);
   params.set('buffer', State.settings.bufferMinutes);
   params.set('glide', State.settings.maxGlideRatio);
+  if (State.settings.fakeTime) {
+    params.set('time', State.settings.fakeTime);
+  }
 
   const newUrl = `${window.location.pathname}?${params.toString()}`;
   window.history.replaceState(null, '', newUrl);
@@ -189,6 +193,11 @@ function parseStateFromUrl() {
   if (params.has('glide')) {
     const g = parseFloat(params.get('glide'));
     if (!isNaN(g) && g > 0) State.settings.maxGlideRatio = g;
+  }
+
+  // Simulated / fake departure base time for testing
+  if (params.has('time') || params.has('fakeTime') || params.has('datetime')) {
+    State.settings.fakeTime = params.get('time') || params.get('fakeTime') || params.get('datetime');
   }
 
   return { pilotSetInUrl };
@@ -342,7 +351,8 @@ function showTappedStopCard(stop, rank = 1) {
     : (isQuerying ? 'Querying...' : (!stop.transit ? 'Queued...' : 'No service'));
 
   UI.tappedRank.textContent = `#${rank}`;
-  UI.tappedName.textContent = `${stop.icon || '🚏'} ${stop.name}`;
+  const hubSuffix = stop.hubTier && stop.hubTier !== 'Local Stop' ? ` [${stop.hubTier}]` : '';
+  UI.tappedName.textContent = `${stop.icon || '🚏'} ${stop.name}${hubSuffix}`;
   UI.tappedBadge.className = `status-pill ${stop.feasibility.badgeClass}`;
   UI.tappedBadge.textContent = stop.feasibility.label;
 
@@ -358,14 +368,23 @@ function showTappedStopCard(stop, rank = 1) {
     ? `Arr ${arrText}`
     : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : 'No service'));
 
+  let linesInfo = '';
+  if (stop.totalLinesCount > 0) {
+    const linesList = [];
+    if (stop.icLines?.length) linesList.push(`🚆 Express: ${stop.icLines.join(', ')}`);
+    if (stop.regTrainLines?.length) linesList.push(`🚆 Reg: ${stop.regTrainLines.join(', ')}`);
+    if (stop.busLines?.length) linesList.push(`🚌 Bus: ${stop.busLines.slice(0, 4).join(', ')}${stop.busLines.length > 4 ? ` +${stop.busLines.length - 4}` : ''}`);
+    if (linesList.length) linesInfo = `<br><span style="font-size:0.82em;opacity:0.85;">Lines: ${escapeHtml(linesList.join(' • '))}</span>`;
+  }
+
   if (hasLiveSchedule) {
-    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${escapeHtml(stop.transit?.summary || 'Transit route')}`;
+    UI.tappedLegs.innerHTML = `🕒 <strong>${depText} ➔ ${arrText}</strong> • ${escapeHtml(stop.transit?.summary || 'Transit route')}${linesInfo}`;
   } else if (isQuerying) {
     UI.tappedLegs.textContent = '⏳ Live timetable query currently in progress...';
   } else if (!stop.transit) {
     UI.tappedLegs.textContent = '⏳ Timetable query queued...';
   } else {
-    UI.tappedLegs.textContent = `⚠️ ${stop.transit?.summary || 'No scheduled transit route found'}`;
+    UI.tappedLegs.innerHTML = `⚠️ ${escapeHtml(stop.transit?.summary || 'No scheduled transit route found')}${linesInfo}`;
   }
 
   // Links
@@ -518,7 +537,10 @@ async function calculateRoutes(options = {}) {
     if (signal.aborted || calcId !== currentCalculationId) return;
 
     // 4. Calculate glide ratios & reach times instantaneously (local vector math)
-    const now = new Date();
+    const now = Geo.parseEffectiveTime(settings.fakeTime);
+    if (settings.fakeTime) {
+      console.log(`[App] Using simulated base time: ${now.toString()}`);
+    }
     for (const stop of stops) {
       // Straight-line travel time: distKm / 30km/h + 30 min buffer
       stop.reachTimeMinutes = Geo.calculateReachTimeMinutes(

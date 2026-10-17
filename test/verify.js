@@ -738,7 +738,50 @@ async function runTests() {
 
   console.log('Test 19: Hub prioritization and pruned alternates tracking: PASS');
 
+  // Test 20: Effective time parsing & combined density score prioritization
+  // 20a: parseEffectiveTime variations
+  const now = new Date();
+  const defTime = Geo.parseEffectiveTime(null);
+  if (Math.abs(defTime.getTime() - now.getTime()) > 5000) {
+    throw new Error(`Default effective time should be close to now: ${defTime}`);
+  }
+
+  const parsedHHMM = Geo.parseEffectiveTime('14:30');
+  if (parsedHHMM.getHours() !== 14 || parsedHHMM.getMinutes() !== 30 || parsedHHMM.getSeconds() !== 0) {
+    throw new Error(`Failed to parse HH:MM: got ${parsedHHMM.toTimeString()}`);
+  }
+
+  const parsedHHMMSS = Geo.parseEffectiveTime('08:45:15');
+  if (parsedHHMMSS.getHours() !== 8 || parsedHHMMSS.getMinutes() !== 45 || parsedHHMMSS.getSeconds() !== 15) {
+    throw new Error(`Failed to parse HH:MM:SS: got ${parsedHHMMSS.toTimeString()}`);
+  }
+
+  const unixSec = Geo.parseEffectiveTime('1700000000');
+  if (unixSec.getTime() !== 1700000000000) {
+    throw new Error(`Failed to parse Unix seconds timestamp: got ${unixSec.getTime()}`);
+  }
+
+  const isoTime = Geo.parseEffectiveTime('2026-10-18T12:00:00Z');
+  if (isoTime.toISOString() !== '2026-10-18T12:00:00.000Z') {
+    throw new Error(`Failed to parse ISO time string: got ${isoTime.toISOString()}`);
+  }
+
+  // 20b: combinedDensityScore prioritization
+  const densityStops = [
+    { id: 'hub_spiez', name: 'Spiez, Bahnhof', type: 'train', distM: 6000, combinedDensityScore: 65, hubTier: 'Tier 1' },
+    { id: 'local_stop', name: 'Sundlauenen, Pilgerweg', type: 'bus', distM: 1000, combinedDensityScore: 1, hubTier: 'Local' },
+  ];
+  // Spiez is 6000m away, but has score 65 -> discount 65 * 120 = 7800m -> effective -1800m
+  // Local stop is 1000m away, score 1 -> discount 120m -> effective 880m
+  const topStop = Geo.prioritizeDiverseStops(densityStops, 1);
+  if (topStop.length !== 1 || topStop[0].id !== 'hub_spiez') {
+    throw new Error(`Expected high-density hub Spiez to be prioritized over local stop: ${JSON.stringify(topStop)}`);
+  }
+
+  console.log('Test 20: Effective time parsing & combined density scoring: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 
 runTests();
+

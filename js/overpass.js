@@ -21,15 +21,17 @@ export const Overpass = {
    * in internal database order rather than distance order.
    */
   buildQuery(lat, lon, radiusM = 4000) {
-    return `[out:json][timeout:12];
+    return `[out:json][timeout:15];
 (
   node["highway"="bus_stop"](around:${radiusM},${lat},${lon});
   node["railway"~"station|halt|tram_stop"](around:${radiusM},${lat},${lon});
   node["railway"="stop"]["train"="yes"](around:${radiusM},${lat},${lon});
   node["public_transport"~"platform|stop_position|station"](around:${radiusM},${lat},${lon});
   way["railway"~"station|halt"](around:${radiusM},${lat},${lon});
-);
-out center;`;
+)->.stops;
+.stops out center;
+rel(bn.stops)["route"~"train|railway|bus|tram|ferry"];
+out body;`;
   },
 
   /**
@@ -94,9 +96,27 @@ out center;`;
     }
 
     const rawElements = (result && result.elements) || [];
+    const rawNodes = rawElements.filter(el => el.type !== 'relation');
+    const rawRelations = rawElements.filter(el => el.type === 'relation');
+
+    // Index parent routes from relations: nodeId -> Map<lineKey, { routeType, ref }>
+    const nodeRoutes = new Map();
+    for (const rel of rawRelations) {
+      const routeType = (rel.tags?.route || 'transit').toLowerCase();
+      const ref = (rel.tags?.ref || rel.tags?.name || '').trim();
+      if (!ref && !rel.tags?.operator) continue;
+      const lineKey = `${routeType}:${ref}`;
+      for (const m of (rel.members || [])) {
+        if (m.type === 'node') {
+          if (!nodeRoutes.has(m.ref)) nodeRoutes.set(m.ref, new Map());
+          nodeRoutes.get(m.ref).set(lineKey, { routeType, ref, tags: rel.tags });
+        }
+      }
+    }
+
     const candidates = [];
 
-    for (const el of rawElements) {
+    for (const el of rawNodes) {
       const stopLat = el.lat !== undefined ? el.lat : (el.center && el.center.lat);
       const stopLon = el.lon !== undefined ? el.lon : (el.center && el.center.lon);
       if (stopLat === undefined || stopLon === undefined) continue;
@@ -248,6 +268,79 @@ out center;`;
       if (!match) {
         dedupedStops.push(cand);
       }
+    }
+
+    // Compute Traffic Density & Infrastructure Hierarchy score for each deduplicated stop
+    for (const stop of dedupedStops) {
+      const cluster = rawNodes.filter(n => {
+        const nLat = n.lat !== undefined ? n.lat : (n.center && n.center.lat);
+        const nLon = n.lon !== undefined ? n.lon : (n.center && n.center.lon);
+        if (nLat === undefined || nLon === undefined) return false;
+        return (Geo.haversineDistanceKm(stop.lat, stop.lon, nLat, nLon) * 1000) <= 300;
+      });
+      stop.clusterNodeCount = cluster.length;
+
+      const clusterLines = new Map();
+      for (const n of cluster) {
+        const rMap = nodeRoutes.get(n.id);
+        if (rMap) {
+          for (const [k, v] of rMap.entries()) {
+            clusterLines.set(k, v);
+          }
+        }
+      }
+
+      const icLines = [];
+      const regTrainLines = [];
+      const busLines = [];
+      const otherLines = [];
+
+      for (const [k, line] of clusterLines.entries()) {
+        const isTrain = line.routeType === 'train' || line.routeType === 'railway';
+        const isBus = line.routeType === 'bus' || line.routeType === 'tram';
+        const refUpper = (line.ref || '').toUpperCase();
+        if (isTrain) {
+          if (/^(IC|ICE|EC|TGV|IR|RJ)/.test(refUpper) || refUpper.startsWith('IC') || refUpper.startsWith('ICE')) {
+            icLines.push(line.ref);
+          } else {
+            regTrainLines.push(line.ref);
+          }
+        } else if (isBus) {
+          busLines.push(line.ref);
+        } else {
+          otherLines.push(line.ref);
+        }
+      }
+
+      stop.icLines = icLines;
+      stop.regTrainLines = regTrainLines;
+      stop.busLines = busLines;
+      stop.otherLines = otherLines;
+      stop.totalLinesCount = icLines.length + regTrainLines.length + busLines.length + otherLines.length;
+
+      // Component A: Route Service Score
+      const routeScore = (icLines.length * 5) + (regTrainLines.length * 3) + (busLines.length * 1) + (otherLines.length * 0.5);
+
+      // Component B: Official Hierarchy & Infrastructure Scale
+      let infraScore = 0;
+      const isMajorStation = stop.tags?.railway === 'station' || stop.tags?.station === 'train';
+      const isHalt = stop.tags?.railway === 'halt' || stop.type === 'train' || stop.tags?.train === 'yes';
+
+      if (isMajorStation) infraScore += 12;
+      else if (isHalt) infraScore += 5;
+
+      if (stop.tags?.['railway:ref']) infraScore += 3;
+      if (stop.tags?.wikidata || stop.tags?.wikipedia) infraScore += 4;
+      if (stop.clusterNodeCount >= 4) infraScore += Math.min(6, stop.clusterNodeCount);
+
+      stop.routeScore = routeScore;
+      stop.infraScore = infraScore;
+      stop.combinedDensityScore = Math.round(routeScore + infraScore);
+
+      if (stop.combinedDensityScore >= 40) stop.hubTier = 'Major Hub';
+      else if (stop.combinedDensityScore >= 15) stop.hubTier = 'Transit Junction';
+      else if (stop.combinedDensityScore >= 5) stop.hubTier = 'Multi-Line Stop';
+      else stop.hubTier = 'Local Stop';
     }
 
     return dedupedStops;

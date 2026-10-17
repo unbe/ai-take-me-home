@@ -182,6 +182,37 @@ export const Geo = {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   },
 
+  /**
+   * Parses an effective time string (HH:MM, ISO, or timestamp) into a Date object, defaulting to current time.
+   * Useful for testing night/morning/weekend scenarios via URL parameter.
+   */
+  parseEffectiveTime(timeStr) {
+    if (!timeStr) return new Date();
+    if (timeStr instanceof Date) return timeStr;
+
+    const str = String(timeStr).trim();
+    // Simple time of day: "14:30" or "09:15:30"
+    if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(str)) {
+      const parts = str.split(':');
+      const d = new Date();
+      d.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), parts[2] ? parseInt(parts[2], 10) : 0, 0);
+      return d;
+    }
+
+    // Unix timestamp (seconds or milliseconds)
+    if (/^\d{9,13}$/.test(str)) {
+      const num = parseInt(str, 10);
+      return new Date(num < 100000000000 ? num * 1000 : num);
+    }
+
+    // ISO string or full date
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+    return new Date();
+  },
+
   _geocodeCache: new Map(),
 
   /**
@@ -445,15 +476,22 @@ export const Geo = {
         else score += 10000;
       }
 
-      // Major railway stations (e.g. railway=station) are primary high-speed regional hubs connecting to multiple lines
-      const isMajorStation = stop.tags?.railway === 'station' || stop.tags?.station === 'train';
-      const isTrain = stop.type === 'train' || stop.type === 'station' || stop.tags?.train === 'yes' || stop.tags?.railway === 'halt';
+      // Traffic Density & Infrastructure Hierarchy weighting
+      if (typeof stop.combinedDensityScore === 'number' && stop.combinedDensityScore > 0) {
+        score -= stop.combinedDensityScore * 120;
+      } else {
+        // Fallback if density score was not attached (e.g. synthetic unit test stops)
+        const isMajorStation = stop.tags?.railway === 'station' || stop.tags?.station === 'train';
+        const isTrain = stop.type === 'train' || stop.type === 'station' || stop.tags?.train === 'yes' || stop.tags?.railway === 'halt';
 
-      if (isMajorStation) {
-        score -= 8000;
-      } else if (isTrain) {
-        score -= 5000;
-      } else if (stop.type === 'ferry' || stop.type === 'cable_car') {
+        if (isMajorStation) {
+          score -= 8000;
+        } else if (isTrain) {
+          score -= 5000;
+        }
+      }
+
+      if (stop.type === 'ferry' || stop.type === 'cable_car') {
         // Tourist ferries and funiculars/cable cars are secondary to scheduled regional buses and trains
         score += 2000;
       }
@@ -477,7 +515,7 @@ export const Geo = {
       const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
       if (selectedIds.has(candId)) continue;
 
-      const isTrain = cand.type === 'train' || cand.type === 'station' || cand.tags?.railway === 'station' || cand.tags?.railway === 'halt' || cand.tags?.train === 'yes';
+      const isTrain = cand.type === 'train' || cand.type === 'station' || cand.tags?.railway === 'station' || cand.tags?.railway === 'halt' || cand.tags?.train === 'yes' || (cand.combinedDensityScore && cand.combinedDensityScore >= 40);
       const key = this.getCorridorKey(cand);
       cand.corridorKey = key;
 

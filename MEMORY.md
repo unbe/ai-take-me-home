@@ -101,19 +101,50 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - Stops within the glide are compared **exclusively against the best stop within the glide**. Outside/unreachable stops are purely informational and cannot downgrade or penalize within-glide options to amber or red.
   - If a stop beyond the glide horizon has the fastest overall arrival, it is highlighted as **blue** (`tier-best`), but does not displace `#1` or affect within-glide stop tiers.
 
-### H. Line Diversity Quota & Train Hub Priority (`prioritizeDiverseStops`)
+### H. Stop Prioritization: Combined Traffic Density & Official Hierarchy
 - **The Problem**: A single rural valley directly below a pilot position (such as Gohl or Sundlauenen/Beatenberg) may contain dozens of small local bus stops, seasonal lake boat docks, and tourist funiculars. A naive proximity sort completely exhausts the candidate stop quota (e.g. `stops=15`) on a single low-frequency line or small village cluster, starving major regional rail hubs slightly further away (e.g. Spiez or Langnau i.E. Bahnhof with direct express trains) from ever being queried.
 - **The Solution**:
-  1. **Corridor Prefix Cap (`maxPerPrefix = 1`)**: In Pass 1, bus/tram/ferry stops sharing the same line/corridor prefix (e.g. `Sundlauenen`, `Beatenberg`, `Leissigen`, `Gohl`) are capped at **1 stop** to avoid redundant queries of stops catching the same vehicle.
-  2. **Hub Prioritization**:
-     - **Major Railway Stations** (`railway === 'station'` or `station === 'train'`): Receive a **-8,000m** distance priority bonus. This pulls major junction stations (such as Spiez, Interlaken Ost, Langnau i.E.) into the top candidate list even from 7–10 km away.
-     - **Commuter Halts & Rail Stops** (`type === 'train'`, `railway === 'halt'`, or `train === 'yes'`): Receive a **-5,000m** priority bonus.
-     - Rail hubs are never capped by local bus corridor quotas.
-  3. **Ferry & Cable Car Deprioritization**: Seasonal lake ferries (`See`) and tourist funiculars receive a +2,000m score penalty so that regular scheduled buses and trains are preferred over tourist boats or cable cars that close early.
-  4. **Multi-Pass Fill**: If the quota is not reached after diverse allocation across valleys/lines, Pass 2 fills any remaining slots with the closest remaining candidates.
+  1. **Route Relations in Single Overpass Query**:
+     - The Overpass query simultaneously fetches candidate stop nodes and their parent route relations in one single query: `rel(bn.stops)["route"~"train|railway|bus|tram|ferry"]; out body;`.
+     - Zero extra HTTP round trips; queries complete in ~350–420 ms.
+     - Routes are parsed into unique lines categorized into:
+       - `icLines` (IC, IR, ICE, TGV, EC, RJX, PE, Eurostar)
+       - `regTrainLines` (RE, S, R, S-Bahn, Regionalbahn)
+       - `busLines`
+       - `otherLines` (tram, ferry, etc.)
+  2. **Combined Density Score Formula**:
+     - **Route Traffic Density**:
+       $$\text{Route Score} = 6 \times |\text{icLines}| + 3 \times |\text{regTrainLines}| + 1 \times \min(8, |\text{busLines}|) + 1 \times \min(4, |\text{otherLines}|)$$
+     - **Official OSM Infrastructure Hierarchy**:
+       - `railway=station` or `station=train`: +15 pts
+       - `wikidata` / `wikipedia` / `wikidata:ref`: +5 pts
+       - `railway:ref` / `uic_ref` / `ref`: +5 pts
+       - Large platform/stop-position cluster ($\ge 4$ nodes): +5 pts
+       - Railway halt (`railway=halt`): +5 pts
+     - **Combined Score**:
+       $$\text{Combined Score} = \text{Route Score} + \text{Infra Score}$$
+     - **Hub Tiers**:
+       - Tier 1: Major InterCity Hub (Score $\ge 40$, e.g., Spiez $\approx 65$, Interlaken Ost $\approx 78$)
+       - Tier 2: Regional Interchange Hub (Score $\ge 20$, e.g., Wilderswil $\approx 25$, Mülenen $\approx 18$)
+       - Tier 3: Minor Station / Rail Halt (Score $\ge 8$)
+       - Local: Standard Bus / Tram roadside stop (Score $< 8$)
+  3. **Effective Distance Discount**:
+     - In `Geo.prioritizeDiverseStops`, each score point discounts the stop's physical distance by **120 meters**:
+       $$\text{Effective Priority Distance} = \text{distM} - (\text{combinedDensityScore} \times 120)$$
+     - Major hubs like Spiez (65 pts $\times 120\text{m} = 7,800\text{m}$) or Interlaken Ost (78 pts $\times 120\text{m} = 9,360\text{m}$) compete strongly against local single-post bus stops even from 7–9 km away.
+     - Fallback: If `combinedDensityScore` is absent (e.g. synthetic test stops), falls back to $-8,000\text{m}$ for railway stations and $-5,000\text{m}$ for railway halts.
+  4. **Corridor Prefix Cap (`maxPerPrefix = 1`)**:
+     - In Pass 1, bus/tram/ferry stops sharing the same line/corridor prefix (e.g. `Sundlauenen`, `Beatenberg`, `Leissigen`, `Gohl`) are capped at **1 stop** to avoid redundant queries of stops catching the same vehicle.
+     - Major hubs (`combinedDensityScore >= 40` or railway stations) are exempt from prefix capping.
   5. **Dynamic Alternate Recovery for No-Service Stops**:
      - Whenever stops are pruned by `maxPerPrefix`, their candidate objects are retained in `stop.prunedAlternates`.
      - During progressive transit querying, if a corridor's remaining stop turns out to have **no service** (`!transit.hasSchedule || totalTripMinutes === Infinity`), its pruned alternates are automatically re-added to the stop list and their timetables queried. This prevents missing viable transit from a valley just because the first stop checked was out of service.
+
+### I. Time Simulation Parameter (`time`, `fakeTime`, `datetime`)
+- **URL Parameter**: `time=HH:MM` (e.g. `time=14:30`), ISO 8601 string (e.g. `datetime=2026-10-18T23:30:00`), or Unix epoch timestamp (`time=1776510000`).
+- **Geo.parseEffectiveTime**: Seamlessly parses any of these formats into a JavaScript `Date` object, defaulting to `new Date()` if omitted.
+- **Use Case**: Allows pilots and developers to simulate landings at night, early morning, or weekends directly via URL without changing device clocks.
+
 
 
 
