@@ -579,6 +579,14 @@ async function calculateRoutes(options = {}) {
         stop.totalTripMinutes = Math.round(
           stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
         );
+        // Treat options more than 16 hours away as not available
+        if (stop.totalTripMinutes > 16 * 60 || (stop.transit.waitAtStopMinutes || 0) > 16 * 60) {
+          stop.transit.hasSchedule = false;
+          stop.transit.success = false;
+          stop.transit.note = 'No service within 16h';
+          stop.transit.summary = 'No service within 16h';
+          stop.totalTripMinutes = Infinity;
+        }
       } else {
         // Without confirmed schedule, sort behind real timetable options
         stop.totalTripMinutes = Infinity;
@@ -668,6 +676,13 @@ async function calculateRoutes(options = {}) {
               stop.totalTripMinutes = Math.round(
                 stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
               );
+              if (stop.totalTripMinutes > 16 * 60 || (stop.transit.waitAtStopMinutes || 0) > 16 * 60) {
+                stop.transit.hasSchedule = false;
+                stop.transit.success = false;
+                stop.transit.note = 'No service within 16h';
+                stop.transit.summary = 'No service within 16h';
+                stop.totalTripMinutes = Infinity;
+              }
             } else {
               stop.totalTripMinutes = Infinity;
             }

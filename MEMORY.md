@@ -86,3 +86,11 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
 
 ### E. Leaflet In-Place DOM Marker Updates
 - To prevent map markers from blinking or disappearing during progressive sequential transit schedule streaming, `MapManager.renderStops` updates existing Leaflet DOM elements (`.setZIndexOffset()`, `.querySelector()`) in-place rather than destroying and recreating layers.
+
+### F. 16-Hour Transit Availability Horizon
+- **Rule**: Any transit connection departing or with a wait time greater than 16 hours from the target departure time is treated as **not available** (`hasSchedule: false`, `summary: 'No service within 16h'`, `totalTripMinutes: Infinity`).
+- **Rationale**:
+  - Paraglider pilots landing in the late afternoon or evening often take a connection the following morning (~8–12 hours later).
+  - However, routes in rural valleys without weekend service (e.g. Oberfrittenbach only running Monday morning) would otherwise return trips 32+ hours away.
+  - To prevent long weekend waits from cluttering the rankings and appearing deceptively early on 24-hour clock faces, a strict 16-hour threshold marks them as unavailable.
+

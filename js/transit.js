@@ -70,8 +70,20 @@ export const Transit = {
       return this.generateFallbackRoute(fromStop, toCoord, targetDepartureDate, 'No scheduled transit found');
     }
 
-    // Pick best itinerary (usually first one or shortest duration)
-    const best = itineraries[0];
+    // Treat whatever is more than 16h away as not available
+    const MAX_HORIZON_MS = 16 * 60 * 60 * 1000;
+    const viableItineraries = itineraries.filter(it => {
+      const dep = new Date(it.startTime);
+      const diffMs = dep.getTime() - targetDepartureDate.getTime();
+      return diffMs <= MAX_HORIZON_MS;
+    });
+
+    if (viableItineraries.length === 0) {
+      return this.generateFallbackRoute(fromStop, toCoord, targetDepartureDate, 'No service within 16h');
+    }
+
+    // Pick best viable itinerary
+    const best = viableItineraries[0];
 
     const transitDurationMinutes = Math.round(best.duration / 60);
     const actualDeparture = new Date(best.startTime);
@@ -79,6 +91,10 @@ export const Transit = {
 
     // Wait time at stop before first transport leaves
     const waitAtStopMinutes = Math.max(0, Math.round((actualDeparture - targetDepartureDate) / (1000 * 60)));
+
+    if (waitAtStopMinutes > 16 * 60 || (transitDurationMinutes + waitAtStopMinutes) > 16 * 60) {
+      return this.generateFallbackRoute(fromStop, toCoord, targetDepartureDate, 'No service within 16h');
+    }
 
     // Parse legs
     const legs = (best.legs || []).map(leg => {
@@ -180,6 +196,8 @@ export const Transit = {
       note,
       departureTime: null,
       arrivalTime: null,
+      transitDepartureTime: null,
+      transitArrivalTime: null,
       transitDurationMinutes: null,
       waitAtStopMinutes: null,
       transfers: 0,

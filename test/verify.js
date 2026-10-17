@@ -476,6 +476,51 @@ async function runTests() {
 
   console.log('Test 14: Transit-line route & destination corridor stop selection: PASS');
 
+  // Test 15: Treat transit more than 16 hours away as not available
+  const baseTargetDate = new Date('2026-10-17T20:00:00.000Z');
+  const dummyStop = { lat: 46.97239, lon: 7.82379, name: 'Gohl, Houetershus' };
+  const dummyDest = { lat: 47.19151, lon: 8.48387 };
+
+  // 15a: Itinerary departing in 10h (within 16h) -> available
+  const dataWithin16h = {
+    itineraries: [{
+      duration: 180 * 60, // 3 hours
+      startTime: new Date('2026-10-18T06:00:00.000Z').getTime(), // 10h wait
+      endTime: new Date('2026-10-18T09:00:00.000Z').getTime(),
+      legs: [{
+        mode: 'BUS',
+        startTime: new Date('2026-10-18T06:00:00.000Z').getTime(),
+        endTime: new Date('2026-10-18T09:00:00.000Z').getTime(),
+        routeShortName: '285',
+      }]
+    }]
+  };
+  const resWithin = Transit.parseItineraries(dataWithin16h, baseTargetDate, dummyStop, dummyDest);
+  if (!resWithin.hasSchedule || !resWithin.success) {
+    throw new Error(`Expected itinerary within 16h to be available, got: ${JSON.stringify(resWithin)}`);
+  }
+
+  // 15b: Itinerary departing in 32h (Monday morning after weekend, > 16h) -> not available
+  const dataOver16h = {
+    itineraries: [{
+      duration: 160 * 60,
+      startTime: new Date('2026-10-19T04:00:00.000Z').getTime(), // 32h wait
+      endTime: new Date('2026-10-19T06:40:00.000Z').getTime(),
+      legs: [{
+        mode: 'BUS',
+        startTime: new Date('2026-10-19T04:00:00.000Z').getTime(),
+        endTime: new Date('2026-10-19T06:40:00.000Z').getTime(),
+        routeShortName: '286',
+      }]
+    }]
+  };
+  const resOver = Transit.parseItineraries(dataOver16h, baseTargetDate, dummyStop, dummyDest);
+  if (resOver.hasSchedule || resOver.success || resOver.summary !== 'No service within 16h') {
+    throw new Error(`Expected itinerary >16h away to be unavailable, got: ${JSON.stringify(resOver)}`);
+  }
+
+  console.log('Test 15: 16-hour transit availability limit: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 
