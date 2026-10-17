@@ -336,16 +336,25 @@ export const Geo = {
 
   /**
    * Generate Google Maps Transit Directions URL with optional departure timestamp
+   * Uses Google Maps native data parameter (!2m3!6e0!7e2!8j{timestamp}!3e3) so Google Maps
+   * mobile and web interfaces actually pre-fill the "Depart at" time instead of defaulting to "Leave now".
    */
   getGoogleMapsUrl(originLat, originLon, destLat, destLon, departureDate = null) {
-    let depParam = '';
     if (departureDate) {
-      const d = typeof departureDate === 'string' ? new Date(departureDate) : departureDate;
-      if (!isNaN(d?.getTime())) {
-        depParam = `&departure_time=${Math.floor(d.getTime() / 1000)}`;
+      let d = null;
+      if (departureDate instanceof Date) {
+        d = departureDate;
+      } else if (typeof departureDate === 'number') {
+        d = new Date(departureDate < 10000000000 ? departureDate * 1000 : departureDate);
+      } else if (typeof departureDate === 'string') {
+        d = this.parseEffectiveTime ? this.parseEffectiveTime(departureDate) : new Date(departureDate);
+      }
+      if (d && !isNaN(d.getTime())) {
+        const epochSec = Math.floor(d.getTime() / 1000);
+        return `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!4m7!4m6!2m3!6e0!7e2!8j${epochSec}!3e3?api=1&departure_time=${epochSec}`;
       }
     }
-    return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit${depParam}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit`;
   },
 
   /**

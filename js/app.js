@@ -389,7 +389,11 @@ function showTappedStopCard(stop, rank = 1) {
 
   // Links
   // Google Maps accepts coordinates natively with departure timestamp
-  const targetDepTime = stop.transit?.departureTime || stop.targetDepartureDate;
+  const now = Geo.parseEffectiveTime(State.settings.fakeTime);
+  const reachMinutes = typeof stop.reachTimeMinutes === 'number'
+    ? stop.reachTimeMinutes
+    : Geo.calculateReachTimeMinutes(stop.distKm, State.settings.speedKmH, State.settings.bufferMinutes);
+  const targetDepTime = stop.transit?.departureTime || stop.targetDepartureDate || new Date(now.getTime() + reachMinutes * 60000);
   UI.tappedLinkGmaps.href = Geo.getGoogleMapsUrl(stop.lat, stop.lon, State.destination.lat, State.destination.lon, targetDepTime);
 
   // SBB links: source is the stop name, destination is the geocoded address
