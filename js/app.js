@@ -684,55 +684,54 @@ async function calculateRoutes(options = {}) {
               const stop = followingStops[i];
               setLoading(true, `Querying corridor timetable ${i + 1}/${followingStops.length}: ${stop.name}...`);
               stop.isQuerying = true;
-              renderStops(stops);
+              stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate, 3000, signal);
+              if (signal.aborted || calcId !== currentCalculationId) return;
 
-            stop.transit = await Transit.planJourney(stop, destination, stop.targetDepartureDate, 3000, signal);
-            if (signal.aborted || calcId !== currentCalculationId) return;
+              stop.isQuerying = false;
 
-            stop.isQuerying = false;
-
-            if (stop.transit && stop.transit.hasSchedule) {
-              stop.totalTripMinutes = Math.round(
-                stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
-              );
-              if (stop.totalTripMinutes > 16 * 60 || (stop.transit.waitAtStopMinutes || 0) > 16 * 60) {
-                stop.transit.hasSchedule = false;
-                stop.transit.success = false;
-                stop.transit.note = 'No service within 16h';
-                stop.transit.summary = 'No service within 16h';
+              if (stop.transit && stop.transit.hasSchedule) {
+                stop.totalTripMinutes = Math.round(
+                  stop.reachTimeMinutes + (stop.transit.transitDurationMinutes || 0) + (stop.transit.waitAtStopMinutes || 0)
+                );
+                if (stop.totalTripMinutes > 16 * 60 || (stop.transit.waitAtStopMinutes || 0) > 16 * 60) {
+                  stop.transit.hasSchedule = false;
+                  stop.transit.success = false;
+                  stop.transit.note = 'No service within 16h';
+                  stop.transit.summary = 'No service within 16h';
+                  stop.totalTripMinutes = Infinity;
+                }
+              } else {
                 stop.totalTripMinutes = Infinity;
               }
-            } else {
-              stop.totalTripMinutes = Infinity;
-            }
 
-            // Progressive sort: within glide first, then beyond glide
-            stops.sort((a, b) => {
-              const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
-              const bHas = b.transit && b.transit.hasSchedule && isFinite(b.totalTripMinutes);
-              if (aHas && !bHas) return -1;
-              if (!aHas && bHas) return 1;
-              if (aHas && bHas) {
-                const aWithin = Geo.isWithinGlide(a);
-                const bWithin = Geo.isWithinGlide(b);
-                // Don't let stops beyond the glide horizon win against stops within the glide
-                if (aWithin && !bWithin) return -1;
-                if (!aWithin && bWithin) return 1;
-                if (a.totalTripMinutes !== b.totalTripMinutes) {
-                  return a.totalTripMinutes - b.totalTripMinutes;
+              // Progressive sort: within glide first, then beyond glide
+              stops.sort((a, b) => {
+                const aHas = a.transit && a.transit.hasSchedule && isFinite(a.totalTripMinutes);
+                const bHas = b.transit && b.transit.hasSchedule && isFinite(b.totalTripMinutes);
+                if (aHas && !bHas) return -1;
+                if (!aHas && bHas) return 1;
+                if (aHas && bHas) {
+                  const aWithin = Geo.isWithinGlide(a);
+                  const bWithin = Geo.isWithinGlide(b);
+                  // Don't let stops beyond the glide horizon win against stops within the glide
+                  if (aWithin && !bWithin) return -1;
+                  if (!aWithin && bWithin) return 1;
+                  if (a.totalTripMinutes !== b.totalTripMinutes) {
+                    return a.totalTripMinutes - b.totalTripMinutes;
+                  }
+                  return a.distM - b.distM;
                 }
+                const pDiff = priority[a.feasibility.status] - priority[b.feasibility.status];
+                if (pDiff !== 0) return pDiff;
                 return a.distM - b.distM;
+              });
+
+              renderStops(stops);
+
+              if (currentlyTappedStop && currentlyTappedStop.id === stop.id) {
+                const currentRank = stops.findIndex(s => s.id === stop.id) + 1;
+                showTappedStopCard(stop, currentRank);
               }
-              const pDiff = priority[a.feasibility.status] - priority[b.feasibility.status];
-              if (pDiff !== 0) return pDiff;
-              return a.distM - b.distM;
-            });
-
-            renderStops(stops);
-
-            if (currentlyTappedStop && currentlyTappedStop.id === stop.id) {
-              const currentRank = stops.findIndex(s => s.id === stop.id) + 1;
-              showTappedStopCard(stop, currentRank);
             }
           }
         }
