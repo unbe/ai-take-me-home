@@ -307,4 +307,115 @@ export const Geo = {
     }
     return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit${depParam}`;
   },
+
+  /**
+   * Prioritizes stops that are further from other stops, preventing redundant schedule queries
+   * for clusters of stops within walking distance of each other.
+   *
+   * Uses multi-tier spatial dispersion:
+   * 1. Higher tiers (e.g. >= 3000m, >= 2000m, >= 1200m) select geographically distinct stops
+   *    in different towns, valleys, and transit corridors.
+   * 2. Moderate tiers (>= 800m, >= 400m) select distinct neighborhoods outside immediate walking distance.
+   * 3. Fallback tier (0m) ensures all requested stop slots are filled if candidate stops are scarce.
+   *
+   * Within any cluster, higher-value stops (e.g. train stations, reachable glide ratio)
+   * are selected over local bus stops.
+   *
+   * @param {Array} stops Candidate stops from Overpass or app state
+   * @param {number} count Maximum number of stops to keep (default: 15)
+   * @param {Object} options Optional settings (tiers, minSeparationM, forceFilter)
+   * @returns {Array} Selected stops prioritized by spatial diversity
+   */
+  prioritizeDiverseStops(stops, count = 15, options = {}) {
+    if (!Array.isArray(stops) || stops.length === 0) return [];
+    if (count <= 0) return [];
+
+    if (stops.length <= count && !options.forceFilter) {
+      return this._attachMinDistances([...stops].sort((a, b) => (a.distM || 0) - (b.distM || 0)));
+    }
+
+    const tiers = options.tiers || (options.minSeparationM
+      ? [options.minSeparationM, Math.round(options.minSeparationM / 2), Math.round(options.minSeparationM / 4), 0]
+      : [3000, 2000, 1200, 800, 400, 0]);
+
+    // Rank candidate stops so that within any cluster, the most valuable stop is evaluated first
+    // (e.g. train stations preferred over bus stops, reachable glide over uphill/unreachable)
+    const getPriority = (stop) => {
+      let score = 0;
+      if (stop.isUphill) {
+        score += 50000;
+      } else if (typeof stop.glideRatio === 'number') {
+        if (stop.glideRatio <= 7.5) score -= 15000;
+        else if (stop.glideRatio <= 10.0) score -= 5000;
+        else score += 10000;
+      } else if (stop.feasibility) {
+        if (stop.feasibility.status === 'reachable') score -= 15000;
+        else if (stop.feasibility.status === 'marginal') score -= 5000;
+        else score += 10000;
+      }
+
+      // Train stations are primary hubs with faster regional transit
+      if (stop.type === 'train') {
+        score -= 800;
+      }
+
+      // Distance from pilot in meters
+      const distM = stop.distM ?? (stop.distKm ? stop.distKm * 1000 : 0);
+      score += distM;
+      return score;
+    };
+
+    const sortedCandidates = [...stops].sort((a, b) => getPriority(a) - getPriority(b));
+
+    const selected = [];
+    const selectedIds = new Set();
+
+    for (const minSepM of tiers) {
+      if (selected.length >= count) break;
+
+      for (const cand of sortedCandidates) {
+        if (selected.length >= count) break;
+        const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
+        if (selectedIds.has(candId)) continue;
+
+        let tooClose = false;
+        if (minSepM > 0) {
+          for (const sel of selected) {
+            const sepKm = this.haversineDistanceKm(cand.lat, cand.lon, sel.lat, sel.lon);
+            const sepM = sepKm * 1000;
+            if (sepM < minSepM) {
+              tooClose = true;
+              break;
+            }
+          }
+        }
+
+        if (!tooClose) {
+          selected.push(cand);
+          selectedIds.add(candId);
+        }
+      }
+    }
+
+    // Sort final selected stops by distance to pilot
+    selected.sort((a, b) => (a.distM || 0) - (b.distM || 0));
+
+    return this._attachMinDistances(selected);
+  },
+
+  /**
+   * Helper to compute each stop's minimum distance to any other stop in the selected set
+   */
+  _attachMinDistances(stops) {
+    for (let i = 0; i < stops.length; i++) {
+      let minDist = Infinity;
+      for (let j = 0; j < stops.length; j++) {
+        if (i === j) continue;
+        const dM = this.haversineDistanceKm(stops[i].lat, stops[i].lon, stops[j].lat, stops[j].lon) * 1000;
+        if (dM < minDist) minDist = dM;
+      }
+      stops[i].minDistToOtherStopsM = isFinite(minDist) ? Math.round(minDist) : null;
+    }
+    return stops;
+  },
 };

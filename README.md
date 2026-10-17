@@ -20,11 +20,14 @@ A fast, serverless, mobile-optimized web application for paraglider, hang glider
 4. **Calculated Reach Time**:
    - Computes time to reach each stop based on straight-line distance at $30\text{ km/h}$ plus a $30\text{-minute}$ pack/buffer time:
      $$t_{\text{reach}} = \left(\frac{d_{\text{km}}}{30}\right) \times 60 + 30\text{ minutes}$$
-5. **Public Transit Routing with Offset Departure Time**:
+5. **Spatial Diversity & Cluster Pruning**:
+   - Prioritizes stops that are further from each other across different transit corridors, villages, and valleys.
+   - Prunes redundant stops clustered within walking distance of each other: avoids querying multiple stops near each other where walking between them yields the same transit outcome.
+6. **Public Transit Routing with Offset Departure Time**:
    - Computes target journey departure time: $\text{Departure} = \text{Current Time} + t_{\text{reach}}$.
    - Queries the **Transitous / MOTIS v2** transit engine (free worldwide transit router with CORS support) from each stop to your destination.
    - Calculates transit duration, wait time, intermediate legs, and final destination arrival time.
-6. **Mobile-First Cockpit / Field UX**:
+7. **Mobile-First Cockpit / Field UX**:
    - **Hero Card**: Instantly highlights the **#1 Best Route** with large, bold, high-contrast numbers for immediate glanceability.
    - **Map Marker Badges**: Custom Leaflet pins displaying both **color coding** (🟢 Reachable, 🟡 Marginal, 🔴 Unreachable) and **explicit numbers** ($L/D$ ratio and transit time).
    - **Collapsible Coordinate Bar**: Input forms collapse into a 1-line chip (`📍 1600m ➔ 🏁 Bern [Change]`) to maximize map and results view on small mobile screens.

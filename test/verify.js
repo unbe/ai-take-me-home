@@ -297,6 +297,60 @@ async function runTests() {
 
   console.log('Test 11: Smart correlated departure & arrival tiers: PASS');
 
+  // Test 12: Spatial diversity stop prioritization (prioritizing stops further from other stops)
+  const candidateStops = [
+    { id: 's1', name: 'Interlaken Ost (Train)', type: 'train', lat: 46.6903, lon: 7.8691, distM: 1000 },
+    { id: 's2', name: 'Interlaken Kursaal (Bus)', type: 'bus', lat: 46.6880, lon: 7.8650, distM: 1100 },
+    { id: 's3', name: 'Interlaken Post (Bus)', type: 'bus', lat: 46.6860, lon: 7.8630, distM: 1200 },
+    { id: 's4', name: 'Unterseen Dorf (Bus)', type: 'bus', lat: 46.6850, lon: 7.8420, distM: 1900 },
+    { id: 's5', name: 'Bönigen See (Bus)', type: 'bus', lat: 46.6860, lon: 7.9050, distM: 2800 },
+    { id: 's6', name: 'Wilderswil (Train)', type: 'train', lat: 46.6660, lon: 7.8670, distM: 3200 },
+  ];
+
+  // 12a: With count = 4, stops in separate locations (Unterseen, Bönigen, Wilderswil) must be kept;
+  // redundant clustered stops (Kursaal, Post) in Interlaken center must be skipped.
+  const diverse4 = Geo.prioritizeDiverseStops(candidateStops, 4);
+  const diverse4Names = diverse4.map(s => s.name);
+  console.log('Test 12a: Selected 4 diverse stops:', diverse4Names);
+
+  if (diverse4.length !== 4) {
+    throw new Error(`Expected 4 stops, got: ${diverse4.length}`);
+  }
+  if (!diverse4Names.includes('Interlaken Ost (Train)') ||
+      !diverse4Names.includes('Unterseen Dorf (Bus)') ||
+      !diverse4Names.includes('Bönigen See (Bus)') ||
+      !diverse4Names.includes('Wilderswil (Train)')) {
+    throw new Error(`Diverse stop selection failed to prioritize distant stops: ${JSON.stringify(diverse4Names)}`);
+  }
+  if (diverse4Names.includes('Interlaken Kursaal (Bus)') || diverse4Names.includes('Interlaken Post (Bus)')) {
+    throw new Error(`Redundant clustered stop was kept when distant stops were available: ${JSON.stringify(diverse4Names)}`);
+  }
+
+  // 12b: With count = 2, Unterseen (1.9km away) must be prioritized over Kursaal (1.1km) and Post (1.2km)
+  // because Kursaal & Post are within walking distance of Interlaken Ost.
+  const diverse2 = Geo.prioritizeDiverseStops(candidateStops, 2);
+  const diverse2Names = diverse2.map(s => s.name);
+  console.log('Test 12b: Selected 2 diverse stops:', diverse2Names);
+  if (!diverse2Names.includes('Interlaken Ost (Train)') || !diverse2Names.includes('Unterseen Dorf (Bus)')) {
+    throw new Error(`Expected [Interlaken Ost, Unterseen Dorf], got: ${JSON.stringify(diverse2Names)}`);
+  }
+
+  // 12c: Check minDistToOtherStopsM is attached and positive
+  for (const s of diverse4) {
+    if (typeof s.minDistToOtherStopsM !== 'number' || s.minDistToOtherStopsM <= 0) {
+      throw new Error(`Invalid minDistToOtherStopsM for ${s.name}: ${s.minDistToOtherStopsM}`);
+    }
+  }
+
+  // 12d: Fallback behavior - when all candidates are in a single cluster, still returns requested count
+  const clusteredOnly = candidateStops.slice(0, 3); // Ost, Kursaal, Post
+  const fallback3 = Geo.prioritizeDiverseStops(clusteredOnly, 3);
+  if (fallback3.length !== 3) {
+    throw new Error(`Fallback failed: expected 3 stops, got: ${fallback3.length}`);
+  }
+
+  console.log('Test 12: Spatial diversity stop prioritization: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

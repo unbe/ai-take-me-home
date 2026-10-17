@@ -312,7 +312,7 @@ out center;`;
 
         if (!keepGoing) {
           console.log(`[Overpass] Reached stop count threshold (${stops.length} >= ${count}) with satisfactory radius (${currentRadiusM}m). Stopping search.`);
-          return stops.slice(0, count);
+          return Geo.prioritizeDiverseStops(stops, count);
         }
 
         console.log(`[Overpass] Glide ratio for stops found so far (${stops.length} stops) is still great! Expanding radius beyond ${currentRadiusM}m (up to ${HARD_MAX_RADIUS_M}m max)...`);
@@ -323,6 +323,6 @@ out center;`;
       throw new Error(`No public transport stops found within ${Math.round(HARD_MAX_RADIUS_M / 1000)}km after ${MAX_QUERIES} queries. Try a different area.`);
     }
 
-    return stops.slice(0, count);
+    return Geo.prioritizeDiverseStops(stops, count);
   },
 };
