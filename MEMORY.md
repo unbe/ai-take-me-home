@@ -146,15 +146,17 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
 - **Geo.parseEffectiveTime**: Seamlessly parses any of these formats into a JavaScript `Date` object, defaulting to `new Date()` if omitted.
 - **Use Case**: Allows pilots and developers to simulate landings at night, early morning, or weekends directly via URL without changing device clocks.
 
-### J. Google Maps Start / Departure Time Parameters
-- **Format**: `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit&departure_time=${epochSec}&time=${hh}:${min}`
-- **Reliability**: Uses the official Google Maps URLs API scheme (`https://www.google.com/maps/dir/?api=1`). Avoids brittle, undocumented protobuf path hacks (like `/data=!4m...`) which cause Google Maps web to fail calculating routes.
-- **Parameters**:
-  - `origin`: Coordinates of the transit stop (`${originLat},${originLon}`)
-  - `destination`: Destination coordinates (`${destLat},${destLon}`)
-  - `travelmode`: `transit`
-  - `departure_time`: Unix epoch timestamp in seconds
-  - `time`: HH:MM local 24-hour time of departure
+### J. Google Maps Start / Departure Time Format
+- **Format**: `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j${epochSec}!3e3?departure_time=${epochSec}`
+- **Why this format**:
+  - The standard query parameter URL (`?api=1&travelmode=transit&departure_time=...`) is ignored by Google Maps web and mobile, always opening with "Leave now".
+  - The exact working Google Maps protobuf path encoding is `!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j{TIMESTAMP}!3e3`, where:
+    - `!3m2!1e3!4b1`: Viewport configuration
+    - `!4m6!4m5`: Directions parameter containers
+    - `!2m3!6e0!7e2!8j{TIMESTAMP}`: "Depart at" mode (`!6e0`), time modifier (`!7e2`), and 64-bit Unix timestamp in seconds (`!8j`)
+    - `!3e3`: Transit travel mode
+  - Fallback: If no departure date is supplied, falls back to `https://www.google.com/maps/dir/?api=1&origin=...&destination=...&travelmode=transit`.
+
 
 
 

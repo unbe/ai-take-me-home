@@ -336,10 +336,9 @@ export const Geo = {
 
   /**
    * Generate Google Maps Transit Directions URL with departure/start time
-   * Format: https://www.google.com/maps/dir/?api=1&origin=...&destination=...&travelmode=transit&departure_time=...&time=...
+   * Format: https://www.google.com/maps/dir/{originLat},{originLon}/{destLat},{destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j{epochSec}!3e3
    */
   getGoogleMapsUrl(originLat, originLon, destLat, destLon, departureDate = null) {
-    let timeParams = '';
     if (departureDate) {
       let d = null;
       if (departureDate instanceof Date) {
@@ -351,12 +350,10 @@ export const Geo = {
       }
       if (d && !isNaN(d.getTime())) {
         const epochSec = Math.floor(d.getTime() / 1000);
-        const hh = String(d.getHours()).padStart(2, '0');
-        const min = String(d.getMinutes()).padStart(2, '0');
-        timeParams = `&departure_time=${epochSec}&time=${hh}:${min}`;
+        return `https://www.google.com/maps/dir/${originLat},${originLon}/${destLat},${destLon}/data=!3m2!1e3!4b1!4m6!4m5!2m3!6e0!7e2!8j${epochSec}!3e3?departure_time=${epochSec}`;
       }
     }
-    return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit${timeParams}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLon}&destination=${destLat},${destLon}&travelmode=transit`;
   },
 
   /**
