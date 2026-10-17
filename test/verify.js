@@ -691,6 +691,53 @@ async function runTests() {
 
   console.log('Test 18: Line prefix diversity & railway hub prioritization: PASS');
 
+  // Test 19: Hub prioritization and pruned alternates tracking
+  const hubCandidates = [
+    { id: 'b1', name: 'Sundlauenen, Geisskilche', type: 'bus', distM: 950 },
+    { id: 'b2', name: 'Sundlauenen, Balmholz', type: 'bus', distM: 1060 },
+    { id: 'b3', name: 'Sundlauenen, Pilgerweg', type: 'bus', distM: 1930 },
+    { id: 'b4', name: 'Merligen, Nastel', type: 'bus', distM: 1200 },
+    { id: 'spiez', name: 'Spiez, Bahnhof', type: 'train', tags: { railway: 'station' }, distM: 6840 },
+  ];
+
+  // Request 3 stops: Sundlauenen Geisskilche (1 bus), Merligen Nastel (1 bus), Spiez Bahnhof (major train hub)
+  const hubResult = Geo.prioritizeDiverseStops(hubCandidates, 3, { maxPerPrefix: 1 });
+  const hubNames = hubResult.map(s => s.name);
+  console.log('Test 19: Hub prioritization result:', hubNames);
+
+  if (!hubNames.includes('Spiez, Bahnhof')) {
+    throw new Error(`Major hub Spiez Bahnhof was not selected: ${JSON.stringify(hubNames)}`);
+  }
+
+  // Sundlauenen Geisskilche should have Balmholz and Pilgerweg in prunedAlternates
+  const sundlauenenStop = hubResult.find(s => s.name.startsWith('Sundlauenen'));
+  if (!sundlauenenStop || !Array.isArray(sundlauenenStop.prunedAlternates) || sundlauenenStop.prunedAlternates.length < 2) {
+    throw new Error(`Pruned alternates not properly attached to Sundlauenen: ${JSON.stringify(sundlauenenStop?.prunedAlternates)}`);
+  }
+  const altNames = sundlauenenStop.prunedAlternates.map(a => a.name);
+  if (!altNames.includes('Sundlauenen, Balmholz') || !altNames.includes('Sundlauenen, Pilgerweg')) {
+    throw new Error(`Expected Balmholz and Pilgerweg in pruned alternates: ${JSON.stringify(altNames)}`);
+  }
+
+  // Simulate Sundlauenen Geisskilche has no service: pruned alternates are re-added
+  sundlauenenStop.transit = { hasSchedule: false, success: false };
+  sundlauenenStop.totalTripMinutes = Infinity;
+
+  const remainingInCorridor = hubResult.filter(s => s.corridorKey === sundlauenenStop.corridorKey && s !== sundlauenenStop);
+  const hasActiveCandidate = remainingInCorridor.some(s => s.transit === undefined || (s.transit?.hasSchedule && isFinite(s.totalTripMinutes)));
+  if (!hasActiveCandidate && sundlauenenStop.prunedAlternates?.length > 0) {
+    const toAdd = sundlauenenStop.prunedAlternates.filter(p => !hubResult.some(s => s.id === p.id));
+    sundlauenenStop.prunedAlternates = [];
+    hubResult.push(...toAdd);
+  }
+
+  const recoveredNames = hubResult.map(s => s.name);
+  if (!recoveredNames.includes('Sundlauenen, Balmholz') || !recoveredNames.includes('Sundlauenen, Pilgerweg')) {
+    throw new Error(`Pruned alternates were not recovered after no-service detection: ${JSON.stringify(recoveredNames)}`);
+  }
+
+  console.log('Test 19: Hub prioritization and pruned alternates tracking: PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

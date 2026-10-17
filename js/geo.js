@@ -430,7 +430,7 @@ export const Geo = {
     const maxPerPrefix = options.maxPerPrefix ?? 1;
 
     // Rank candidate stops so that within any cluster, the most valuable stop is evaluated first
-    // (e.g. train stations preferred over bus stops, reachable glide over uphill/unreachable)
+    // (e.g. major train hubs preferred over local bus stops, reachable glide over uphill/unreachable)
     const getPriority = (stop) => {
       let score = 0;
       if (stop.isUphill) {
@@ -445,9 +445,14 @@ export const Geo = {
         else score += 10000;
       }
 
-      // Train stations are primary high-speed regional hubs connecting to multiple lines
-      if (stop.type === 'train' || stop.type === 'station') {
-        score -= 4000;
+      // Major railway stations (e.g. railway=station) are primary high-speed regional hubs connecting to multiple lines
+      const isMajorStation = stop.tags?.railway === 'station' || stop.tags?.station === 'train';
+      const isTrain = stop.type === 'train' || stop.type === 'station' || stop.tags?.train === 'yes' || stop.tags?.railway === 'halt';
+
+      if (isMajorStation) {
+        score -= 8000;
+      } else if (isTrain) {
+        score -= 5000;
       } else if (stop.type === 'ferry' || stop.type === 'cable_car') {
         // Tourist ferries and funiculars/cable cars are secondary to scheduled regional buses and trains
         score += 2000;
@@ -464,19 +469,33 @@ export const Geo = {
     const selected = [];
     const selectedIds = new Set();
     const prefixCounts = new Map();
+    const prunedByPrefix = new Map();
 
     // Pass 1: Select diverse stops, capping local bus stops sharing the same line/corridor prefix
     // to ensure other lines and regional train hubs are prioritized.
     for (const cand of sortedCandidates) {
-      if (selected.length >= count) break;
       const candId = cand.id ?? `${cand.lat.toFixed(5)},${cand.lon.toFixed(5)}`;
       if (selectedIds.has(candId)) continue;
 
-      const isTrain = cand.type === 'train' || cand.type === 'station';
+      const isTrain = cand.type === 'train' || cand.type === 'station' || cand.tags?.railway === 'station' || cand.tags?.railway === 'halt' || cand.tags?.train === 'yes';
       const key = this.getCorridorKey(cand);
+      cand.corridorKey = key;
+
+      // If quota is already filled, continue to track pruned alternates for already-selected corridors
+      if (selected.length >= count) {
+        if (!isTrain && prefixCounts.has(key)) {
+          if (!prunedByPrefix.has(key)) prunedByPrefix.set(key, []);
+          prunedByPrefix.get(key).push(cand);
+        }
+        continue;
+      }
 
       // Bus/tram stops on the same line/prefix are capped to avoid crowding out other lines/towns
       if (!isTrain && (prefixCounts.get(key) || 0) >= maxPerPrefix) {
+        if (!prunedByPrefix.has(key)) {
+          prunedByPrefix.set(key, []);
+        }
+        prunedByPrefix.get(key).push(cand);
         continue;
       }
 
@@ -525,6 +544,19 @@ export const Geo = {
         }
       }
     }
+
+    // Attach pruned alternates for each selected stop so that if a stop has no service,
+    // the app can re-add pruned stops from that same corridor prefix and query their timetables.
+    for (const sel of selected) {
+      const key = sel.corridorKey || this.getCorridorKey(sel);
+      sel.corridorKey = key;
+      const pruned = (prunedByPrefix.get(key) || []).filter(p => {
+        const pId = p.id ?? `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
+        return !selectedIds.has(pId);
+      });
+      sel.prunedAlternates = pruned;
+    }
+    selected.prunedByPrefix = prunedByPrefix;
 
     // Sort final selected stops by distance to pilot
     selected.sort((a, b) => (a.distM || 0) - (b.distM || 0));

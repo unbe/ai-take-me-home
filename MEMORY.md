@@ -104,10 +104,16 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
 ### H. Line Diversity Quota & Train Hub Priority (`prioritizeDiverseStops`)
 - **The Problem**: A single rural valley directly below a pilot position (such as Gohl or Sundlauenen/Beatenberg) may contain dozens of small local bus stops, seasonal lake boat docks, and tourist funiculars. A naive proximity sort completely exhausts the candidate stop quota (e.g. `stops=15`) on a single low-frequency line or small village cluster, starving major regional rail hubs slightly further away (e.g. Spiez or Langnau i.E. Bahnhof with direct express trains) from ever being queried.
 - **The Solution**:
-  1. **Strict 1 Stop Per Line/Corridor Prefix (`maxPerPrefix = 1`)**: In Pass 1, bus/tram/ferry stops sharing the same line/corridor prefix (e.g. `Sundlauenen`, `Beatenberg`, `Leissigen`, `Gohl`) are capped at **exactly 1 stop**. (Allowing 2 stops previously permitted redundant stops like `Sundlauenen, Geisskilche` and `Sundlauenen, Balmholz` to consume 2 slots each, crowding out Spiez).
-  2. **Railway Station Weighting**: Railway stations (`type === 'train'` or `railway === 'station'/'halt'`) receive a -4,000m priority distance bonus and do not consume local bus/corridor quotas.
+  1. **Corridor Prefix Cap (`maxPerPrefix = 1`)**: In Pass 1, bus/tram/ferry stops sharing the same line/corridor prefix (e.g. `Sundlauenen`, `Beatenberg`, `Leissigen`, `Gohl`) are capped at **1 stop** to avoid redundant queries of stops catching the same vehicle.
+  2. **Hub Prioritization**:
+     - **Major Railway Stations** (`railway === 'station'` or `station === 'train'`): Receive a **-8,000m** distance priority bonus. This pulls major junction stations (such as Spiez, Interlaken Ost, Langnau i.E.) into the top candidate list even from 7–10 km away.
+     - **Commuter Halts & Rail Stops** (`type === 'train'`, `railway === 'halt'`, or `train === 'yes'`): Receive a **-5,000m** priority bonus.
+     - Rail hubs are never capped by local bus corridor quotas.
   3. **Ferry & Cable Car Deprioritization**: Seasonal lake ferries (`See`) and tourist funiculars receive a +2,000m score penalty so that regular scheduled buses and trains are preferred over tourist boats or cable cars that close early.
   4. **Multi-Pass Fill**: If the quota is not reached after diverse allocation across valleys/lines, Pass 2 fills any remaining slots with the closest remaining candidates.
+  5. **Dynamic Alternate Recovery for No-Service Stops**:
+     - Whenever stops are pruned by `maxPerPrefix`, their candidate objects are retained in `stop.prunedAlternates`.
+     - During progressive transit querying, if a corridor's remaining stop turns out to have **no service** (`!transit.hasSchedule || totalTripMinutes === Infinity`), its pruned alternates are automatically re-added to the stop list and their timetables queried. This prevents missing viable transit from a valley just because the first stop checked was out of service.
 
 
 

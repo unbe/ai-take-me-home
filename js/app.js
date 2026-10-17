@@ -559,15 +559,16 @@ async function calculateRoutes(options = {}) {
 
     // 5. Query public transit strictly sequentially (1 request at a time)
     // Whenever a stop is shown, always also query the travel time, even if the glide ratio isn't great
-    const totalToQuery = stops.length;
     let liveQueriesCount = 0;
 
-    for (let i = 0; i < stops.length; i++) {
+    while (true) {
       if (signal.aborted || calcId !== currentCalculationId) return;
 
-      const stop = stops[i];
+      const stop = stops.find(s => s.transit === undefined);
+      if (!stop) break;
+
       liveQueriesCount++;
-      setLoading(true, `Querying timetable ${liveQueriesCount}/${totalToQuery}: ${stop.name}...`);
+      setLoading(true, `Querying timetable ${liveQueriesCount}/${stops.length}: ${stop.name}...`);
       stop.isQuerying = true;
       renderStops(stops);
 
@@ -592,6 +593,51 @@ async function calculateRoutes(options = {}) {
       } else {
         // Without confirmed schedule, sort behind real timetable options
         stop.totalTripMinutes = Infinity;
+      }
+
+      // Check if this stop has no service. If so, and some stops from its corridor were pruned
+      // by maxPerPrefix, re-add those pruned stops to query their timetables!
+      const hasConfirmedService = stop.transit && stop.transit.hasSchedule && isFinite(stop.totalTripMinutes);
+      if (!hasConfirmedService && stop.corridorKey) {
+        const remainingInCorridor = stops.filter(s => s.corridorKey === stop.corridorKey && s !== stop);
+        const hasActiveCandidate = remainingInCorridor.some(s => s.transit === undefined || (s.transit?.hasSchedule && isFinite(s.totalTripMinutes)));
+        if (!hasActiveCandidate && Array.isArray(stop.prunedAlternates) && stop.prunedAlternates.length > 0) {
+          const toAdd = stop.prunedAlternates.filter(p => !stops.some(s => s.id === p.id));
+          stop.prunedAlternates = []; // consume so we do not re-add repeatedly
+
+          if (toAdd.length > 0) {
+            console.log(`[App] Stop ${stop.name} has no service. Re-adding ${toAdd.length} pruned stops for corridor '${stop.corridorKey}':`, toAdd.map(a => a.name));
+            // Ensure terrain elevation is populated
+            const missingElevation = toAdd.filter(s => typeof s.elevationM !== 'number');
+            if (missingElevation.length > 0) {
+              await Elevation.populateStopElevations(missingElevation, signal);
+              if (signal.aborted || calcId !== currentCalculationId) return;
+            }
+
+            for (const alt of toAdd) {
+              alt.corridorKey = stop.corridorKey;
+              alt.reachTimeMinutes = Geo.calculateReachTimeMinutes(
+                alt.distKm,
+                settings.speedKmH,
+                settings.bufferMinutes
+              );
+              const glide = Geo.calculateGlideRatio(alt.distM, pilot.altM, alt.elevationM);
+              alt.glideRatio = glide.ratio;
+              alt.altDropM = glide.altDropM;
+              alt.isUphill = glide.isUphill;
+              alt.feasibility = Geo.evaluateFeasibility(
+                alt.glideRatio,
+                alt.isUphill,
+                settings.maxGlideRatio - 0.5,
+                settings.maxGlideRatio + 2.0
+              );
+              alt.targetDepartureDate = new Date(now.getTime() + alt.reachTimeMinutes * 60000);
+            }
+
+            stops.push(...toAdd);
+            State.stops = stops;
+          }
+        }
       }
 
       // Progressive sort: Confirmed live schedules within glide first, ordered by total travel time;
