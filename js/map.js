@@ -316,8 +316,12 @@ export const MapManager = {
       }
 
       // Format times
-      const depTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : (isQuerying ? '...' : '--');
-      const arrTime = hasLiveSchedule ? Geo.formatTime(stop.transit?.arrivalTime) : (isQuerying ? '...' : '--');
+      const depTime = hasLiveSchedule
+        ? Geo.formatTime(stop.transit?.departureTime)
+        : (isQuerying ? '...' : (stop.transit ? 'xx' : '--'));
+      const arrTime = hasLiveSchedule
+        ? Geo.formatTime(stop.transit?.arrivalTime)
+        : (isQuerying ? '...' : (stop.transit ? 'xx' : '--'));
 
       // 1. Smart correlated color tiers (see tiers.js)
       let depClass = 'tier-none';

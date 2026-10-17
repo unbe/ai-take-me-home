@@ -330,11 +330,13 @@ function showTappedStopCard(stop, rank = 1) {
 
   const totalTimeText = (hasLiveSchedule && isFinite(stop.totalTripMinutes))
     ? Geo.formatDurationMinutes(stop.totalTripMinutes)
-    : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : '--'));
+    : (isQuerying ? 'Fetching...' : (!stop.transit ? 'Queued...' : 'xx'));
 
   const glideNum = stop.glideRatio !== null ? `${stop.glideRatio}:1` : (stop.isUphill ? 'UP' : 'N/A');
   const dropText = stop.altDropM >= 0 ? `-${stop.altDropM}m drop` : `+${Math.abs(stop.altDropM)}m uphill`;
-  const depText = hasLiveSchedule ? Geo.formatTime(stop.transit?.departureTime) : '--:--';
+  const depText = hasLiveSchedule
+    ? Geo.formatTime(stop.transit?.departureTime)
+    : (stop.transit ? 'xx' : '--:--');
   const arrText = hasLiveSchedule
     ? Geo.formatTime(stop.transit?.arrivalTime)
     : (isQuerying ? 'Querying...' : (!stop.transit ? 'Queued...' : 'No service'));
