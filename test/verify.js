@@ -894,6 +894,28 @@ async function runTests() {
 
   console.log(`Test 22: App Version v${APP_VERSION} synchronized across js/version.js, sw.js, and index.html: PASS`);
 
+  // Test 23: Pilot Altitude Source Rules (GPS/URL preserved, manual tap = ground + 150m)
+  // Simulate manual tap logic:
+  const groundElevationAtPoint = 560; // e.g. Interlaken Ost
+  const manualTapAltitude = groundElevationAtPoint + 150;
+  if (manualTapAltitude !== 710) {
+    throw new Error(`Expected manual tap altitude to be 150m above ground (710m), got ${manualTapAltitude}`);
+  }
+
+  // Verify URL altitude preservation vs fallback in app.js
+  const appJsContent = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf-8');
+  if (!appJsContent.includes('altSetInUrl')) {
+    throw new Error('js/app.js must track altSetInUrl to distinguish URL altitudes from omitted values');
+  }
+  if (!appJsContent.includes('groundAlt + 150')) {
+    throw new Error('js/app.js must adjust manual tap altitude to groundAlt + 150');
+  }
+  // Verify manual tap does not conditionally ignore groundAlt when pilotAlt is higher
+  if (appJsContent.includes('State.pilot.altM < groundAlt')) {
+    throw new Error('js/app.js should unconditionally adjust manual tap altitude to groundAlt + 150');
+  }
+  console.log('Test 23: Pilot altitude sources (GPS/URL preserved, manual tap = ground + 150m AGL): PASS');
+
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }
 

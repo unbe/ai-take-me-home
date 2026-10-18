@@ -231,3 +231,9 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
 - **Decommissioning OpenTopoMap**:
   - The `tile.opentopomap.org` public tile service is frequently down, heavily rate-limited, or fails with timeout/CORS errors in modern web browsers, causing broken grey tile grids.
   - OpenTopoMap was removed from the layer switcher to maintain high reliability outdoors.
+
+### P. Pilot Altitude Handling by Source (GPS, URL, Manual Tap)
+- **Live 3D GPS Fix**: When altitude is acquired from the device's GPS (`pos.coords.altitude`), it is assumed correct and preserved strictly as-is without any artificial offsets or adjustments.
+- **URL Query Parameters (`alt` / `pilotAlt`)**: When altitude is explicitly supplied in the URL, `altSetInUrl` is marked `true`, and the value is assumed correct and preserved as-is without alteration. If pilot coordinates (`lat`, `lon`) are provided in the URL but `alt` is omitted, the app queries Open-Meteo terrain elevation and defaults to `groundAlt + 150m`.
+- **Manual Map Tap (`MapManager.onSetPilotPosition`)**: When a pilot position is placed manually on the map (via long-press/context menu), the app unconditionally queries Open-Meteo terrain elevation at those coordinates and adjusts the pilot altitude to **150 m above ground level** (`groundAlt + 150m AGL`). It does not retain the pilot's previous GPS or altitude from another location.
+

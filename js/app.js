@@ -8,7 +8,7 @@ import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
 import { Storage } from './storage.js?v=3.1';
-import { APP_VERSION } from './version.js?v=1.9';
+import { APP_VERSION } from './version.js?v=1.10';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
@@ -225,7 +225,7 @@ function parseStateFromUrl() {
     State.settings.fakeTime = params.get('time') || params.get('fakeTime') || params.get('datetime');
   }
 
-  return { pilotSetInUrl };
+  return { pilotSetInUrl, altSetInUrl };
 }
 
 /**
@@ -488,19 +488,18 @@ async function calculateRoutes(options = {}) {
   }
 
   try {
-    // If pilot elevation needs to be updated (e.g. from setting pilot position via map contextmenu)
+    // If pilot elevation needs to be updated (from setting pilot position via manual tap)
     if (options.updatePilotElevation) {
       try {
         const elevs = await Elevation.getBatchElevations([{ lat: pilot.lat, lon: pilot.lon }], signal);
         if (signal.aborted || calcId !== currentCalculationId) return;
         if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
           const groundAlt = Math.round(elevs[0]);
-          if (State.pilot.altM < groundAlt) {
-            State.pilot.altM = groundAlt + 300;
-            MapManager.setPilotMarker(pilot.lat, pilot.lon, State.pilot.altM);
-            syncInputsFromState();
-            updateUrlFromState();
-          }
+          State.pilot.altM = groundAlt + 150;
+          MapManager.setPilotMarker(pilot.lat, pilot.lon, State.pilot.altM);
+          syncInputsFromState();
+          updateUrlFromState();
+          showToast(`🪂 Pilot: ${pilot.lat.toFixed(4)}, ${pilot.lon.toFixed(4)} | Alt: ${State.pilot.altM}m (150m AGL)`, 3500);
         }
       } catch (e) {
         if (signal.aborted || calcId !== currentCalculationId) return;
@@ -1125,7 +1124,7 @@ function initEvents() {
     MapManager.setPilotMarker(lat, lon, State.pilot.altM);
     syncInputsFromState();
     updateUrlFromState();
-    showToast(`🪂 Pilot position set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+    showToast(`🪂 Pilot position set. Querying terrain elevation...`);
     calculateRoutes({ updatePilotElevation: true });
   };
 
@@ -1186,7 +1185,7 @@ async function init() {
   }
 
   // 2. URL parameters override stored config (e.g. if a shared link or test URL is opened)
-  const { pilotSetInUrl } = parseStateFromUrl();
+  const { pilotSetInUrl, altSetInUrl } = parseStateFromUrl();
   syncInputsFromState();
   updateUrlFromState();
   Storage.saveConfig(State.destination, State.settings);
@@ -1252,13 +1251,15 @@ async function init() {
   }
 
   if (pilotSetInUrl) {
-    // Current position and altitude set in URL -> DO NOT query GPS!
+    // Current position set in URL -> DO NOT query GPS!
     console.log('[Take Me Home] Pilot position set in URL: skipping automatic GPS query');
-    if (!State.pilot.altM || isNaN(State.pilot.altM)) {
+    if (!altSetInUrl) {
+      // If coordinates were provided in URL but altitude was omitted, fetch ground elevation + 150m AGL
       try {
         const elevs = await Elevation.getBatchElevations([{ lat: State.pilot.lat, lon: State.pilot.lon }]);
         if (elevs && elevs.length > 0 && typeof elevs[0] === 'number') {
-          State.pilot.altM = Math.round(elevs[0]) + 300;
+          State.pilot.altM = Math.round(elevs[0]) + 150;
+          MapManager.setPilotMarker(State.pilot.lat, State.pilot.lon, State.pilot.altM);
         }
       } catch (e) {
         console.warn('Could not query terrain elevation for URL coordinates:', e);
