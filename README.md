@@ -12,7 +12,7 @@ A fast, serverless, mobile-optimized web application for paraglider, hang glider
 2. **High-Resolution Mapterhorn Terrain Tileset**:
    - Integrates the open-source **[Mapterhorn](https://mapterhorn.com)** global terrain tileset (`tiles.mapterhorn.com/tilejson.json`, Terrarium DEM format).
    - Renders GPU-accelerated 3D hillshading and relief directly beneath OSM labels and flight paths, giving glider pilots relief visualization across mountain terrain.
-   - Includes standard OSM and OpenTopoMap layers in the top-right layer switcher.
+   - Includes standard OSM and Satellite layers in the top-right layer switcher.
 3. **Terrain Elevation & Glide Ratio ($L/D$)**:
    - Queries the open, free Open-Meteo Elevation API in a single batch request to fetch ground elevation for all candidate stops.
    - Computes Glide Ratio:

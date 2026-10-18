@@ -35,11 +35,6 @@ export const MapManager = {
       attribution: '&copy; OpenStreetMap contributors',
     });
 
-    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{y}.png', {
-      maxZoom: 17,
-      attribution: '&copy; OpenTopoMap contributors',
-    });
-
     // Satellite Imagery Layer (ESRI World Imagery + Reference Labels)
     const satelliteTiles = L.tileLayer(
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -109,12 +104,10 @@ export const MapManager = {
       baseLayers['🏔️ Mapterhorn Terrain'] = mapterhornLayer;
       baseLayers['🛰️ Satellite'] = satelliteLayer;
       baseLayers['Standard OSM'] = osmLayer;
-      baseLayers['OpenTopoMap'] = topoLayer;
     } else {
       osmLayer.addTo(this.map);
       baseLayers['Standard OSM'] = osmLayer;
       baseLayers['🛰️ Satellite'] = satelliteLayer;
-      baseLayers['OpenTopoMap'] = topoLayer;
     }
 
     // Layer switcher in top-right

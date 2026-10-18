@@ -219,3 +219,12 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
      - Configured SVG `.locate-icon` and `.locate-icon-inline` with `overflow: visible; flex-shrink: 0; margin: auto;` to eliminate line-box and flex clipping.
   4. **Icon Standardization**:
      - Standardized on the 4-tick target crosshair SVG icon (`<circle cx="12" cy="12" r="7">`, inner `<circle cx="12" cy="12" r="2.5">`, and 4 axis lines) across both `#btn-gps` and the welcome onboarding modal (`.locate-icon-inline`).
+
+### O. Map Base Layers & Decommissioning of OpenTopoMap
+- **Supported Base Layers**:
+  1. `🏔️ Mapterhorn Terrain`: GPU-rendered Terrarium DEM hillshading (`tiles.mapterhorn.com`) combined with OpenStreetMap raster.
+  2. `🛰️ Satellite`: ESRI World Imagery (`server.arcgisonline.com`) layered with reference place labels.
+  3. `Standard OSM`: OpenStreetMap standard raster tiles.
+- **Decommissioning OpenTopoMap**:
+  - The `tile.opentopomap.org` public tile service is frequently down, heavily rate-limited, or fails with timeout/CORS errors in modern web browsers, causing broken grey tile grids.
+  - OpenTopoMap was removed from the layer switcher to maintain high reliability outdoors.

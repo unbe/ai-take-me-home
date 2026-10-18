@@ -8,7 +8,7 @@ import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
 import { Storage } from './storage.js?v=3.1';
-import { APP_VERSION } from './version.js?v=1.5';
+import { APP_VERSION } from './version.js?v=1.6';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
