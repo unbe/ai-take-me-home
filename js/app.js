@@ -8,6 +8,7 @@ import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
 import { Storage } from './storage.js?v=3.1';
+import { APP_VERSION } from './version.js?v=1.1';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
@@ -89,6 +90,11 @@ const UI = {
   introModalBackdrop: document.getElementById('intro-modal-backdrop'),
   btnCloseIntroModal: document.getElementById('btn-close-intro-modal'),
   btnIntroModalDone: document.getElementById('btn-intro-modal-done'),
+
+  // Version & Updates
+  btnVersion: document.getElementById('btn-version'),
+  appVersionText: document.getElementById('app-version-text'),
+  introVersionText: document.getElementById('intro-version-text'),
 };
 
 /**
@@ -978,6 +984,45 @@ function closeIntroModal() {
 }
 
 /**
+ * Check for Service Worker updates to ensure installed PWA users get latest version promptly
+ */
+function checkForUpdates(manual = false) {
+  if (!('serviceWorker' in navigator)) {
+    if (manual) showToast(`Running Take Me Home v${APP_VERSION}`);
+    return;
+  }
+
+  if (UI.btnVersion) {
+    UI.btnVersion.classList.add('is-checking');
+  }
+
+  if (manual) {
+    showToast(`Checking for updates... (current v${APP_VERSION})`, 2000);
+  }
+
+  navigator.serviceWorker.getRegistration()
+    .then((reg) => {
+      if (!reg) {
+        if (UI.btnVersion) UI.btnVersion.classList.remove('is-checking');
+        if (manual) showToast(`Take Me Home v${APP_VERSION}`);
+        return;
+      }
+      return reg.update().then(() => {
+        setTimeout(() => {
+          if (UI.btnVersion) UI.btnVersion.classList.remove('is-checking');
+          if (!reg.installing && !reg.waiting && manual) {
+            showToast(`✨ You're running the latest version (v${APP_VERSION})!`, 3000);
+          }
+        }, 800);
+      });
+    })
+    .catch((err) => {
+      console.warn('[PWA] Update check failed:', err);
+      if (UI.btnVersion) UI.btnVersion.classList.remove('is-checking');
+    });
+}
+
+/**
  * Initialize event listeners
  */
 function initEvents() {
@@ -1019,6 +1064,11 @@ function initEvents() {
   }
   if (UI.introModalBackdrop) {
     UI.introModalBackdrop.addEventListener('click', closeIntroModal);
+  }
+
+  // Version click -> manual update check
+  if (UI.btnVersion) {
+    UI.btnVersion.addEventListener('click', () => checkForUpdates(true));
   }
 
   // Live input changes update persistent settings
@@ -1133,18 +1183,53 @@ async function init() {
   MapManager.init('map', State.pilot.lat, State.pilot.lon, 13);
   MapManager.setPilotMarker(State.pilot.lat, State.pilot.lon, State.pilot.altM);
   MapManager.setDestinationMarker(State.destination.lat, State.destination.lon);
+  // Set version display in UI
+  if (UI.appVersionText) UI.appVersionText.textContent = `v${APP_VERSION}`;
+  if (UI.introVersionText) UI.introVersionText.textContent = `v${APP_VERSION}`;
   initEvents();
 
-  // 3. Register Service Worker for PWA offline app shell & shortcut capability
+  // 3. Register Service Worker with prompt update checks
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
         .then((reg) => {
           console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
+          // Promptly check for updates on startup
+          reg.update();
+
+          // Listen for new service worker installation
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  console.log('[PWA] New version ready! Updating...');
+                  showToast('🚀 New version ready! Updating...', 2500);
+                }
+              });
+            }
+          });
         })
         .catch((err) => {
           console.warn('[PWA] ServiceWorker registration failed:', err);
         });
+    });
+
+    // Promptly check for updates when user switches back to the app on mobile
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkForUpdates(false);
+      }
+    });
+
+    // When the new service worker activates and claims the client, refresh to show new code
+    let isRefreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        console.log('[PWA] ServiceWorker controller changed -> reloading page to apply latest version');
+        window.location.reload();
+      }
     });
   }
 

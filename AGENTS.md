@@ -3,3 +3,4 @@
 - Feel free to install any tools you may need.
 - Ask before making authenticated external requests. Generic requests are fine, something using my credentials needs confirmation.
 - Maintain a `MEMORY.md` file in the project root as the source of truth for architectural decisions, system design, domain models, and tricky edge cases. Read it before making design decisions or writing complex code. Update it whenever you discover or build non-obvious context, make architectural choices, or resolve subtle bugs.
+- Maintain an application version in `js/version.js` and `sw.js`. Increment the minor version whenever each task is complete, before git commit. Ensure the Service Worker and cache update promptly so installed app users get updates immediately.

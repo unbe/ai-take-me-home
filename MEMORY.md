@@ -183,3 +183,20 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - Accessible on-demand anytime via the "ℹ️ How to use & About" button in the Settings panel (`#input-panel`).
 - **Community Bug Tracker / Feedback Link**:
   - Positioned in the Settings panel footer (`#link-github-issues`), linking directly to `https://github.com/unbe/ai-take-me-home/issues` with `target="_blank" rel="noopener noreferrer"` for pilots to report bugs or submit feature ideas.
+
+### M. Application Versioning & Prompt PWA Update Pipeline
+- **Version Source of Truth**:
+  - Primary constant defined in [`js/version.js`](file:///Users/artem/src/take-me-home/js/version.js) as `APP_VERSION` and synchronized with `sw.js` `APP_VERSION`.
+  - **Rule**: Increment the minor version whenever each task is complete, before making a git commit.
+  - Displayed in Settings (`#input-panel`) via `#btn-version` / `#app-version-text` and in the intro modal subtitle (`#intro-version-text`).
+- **Prompt PWA Update Architecture**:
+  - **Zero Server-Side SW Caching**: [`serve.py`](file:///Users/artem/src/take-me-home/serve.py) emits `Cache-Control: no-cache, no-store, must-revalidate, max-age=0` and `Expires: 0` for `sw.js`.
+  - **Browser Cache Bypass**: Registered via `{ updateViaCache: 'none' }` to ensure browsers query the network for `sw.js` on every check.
+  - **Auto-Update Lifecycle Triggers**:
+    1. App startup (`reg.update()`).
+    2. Visibility change (`document.visibilityState === 'visible'`) checks for updates whenever a mobile pilot switches back to the installed PWA from another app.
+    3. User-initiated check when tapping the version badge in Settings.
+  - **Instant Activation & Seamless Refresh**:
+    1. New `sw.js` executes `self.skipWaiting()` in `install`, bypassing waiting state.
+    2. In `activate`, obsolete version caches are deleted and `self.clients.claim()` assumes control immediately.
+    3. Client listens for `navigator.serviceWorker.oncontrollerchange` and reloads (`window.location.reload()`) to immediately render updated HTML/JS assets.

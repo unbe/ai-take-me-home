@@ -8,6 +8,8 @@ import { Elevation } from '../js/elevation.js';
 import { Overpass } from '../js/overpass.js';
 import { computeTiers } from '../js/tiers.js';
 import { Storage } from '../js/storage.js';
+import { APP_VERSION } from '../js/version.js';
+import fs from 'fs';
 
 async function runTests() {
   console.log('=== Starting Unit & Geodesic Tests ===');
@@ -868,6 +870,29 @@ async function runTests() {
 
   console.log(`Test 21: Storage & Clean Shortcut URL = ${cleanUrl}`);
   console.log('Test 21: Storage module & clean shortcut URL: PASS');
+
+  // Test 22: Version synchronization & PWA update consistency
+  if (!APP_VERSION || !/^\d+\.\d+(\.\d+)?$/.test(APP_VERSION)) {
+    throw new Error(`Invalid APP_VERSION format: "${APP_VERSION}". Must follow minor version format (e.g. 1.1 or 1.1.0)`);
+  }
+
+  // Check sw.js version consistency
+  const swContent = fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf-8');
+  const swVersionMatch = swContent.match(/const APP_VERSION = ['"]([^'"]+)['"]/);
+  if (!swVersionMatch || swVersionMatch[1] !== APP_VERSION) {
+    throw new Error(`Version mismatch: js/version.js has "${APP_VERSION}" but sw.js has "${swVersionMatch ? swVersionMatch[1] : 'none'}"`);
+  }
+  if (!swContent.includes('js/version.js') || !swContent.includes('js/storage.js')) {
+    throw new Error('sw.js PRECACHE_ASSETS is missing js/version.js or js/storage.js');
+  }
+
+  // Check index.html elements
+  const htmlContent = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf-8');
+  if (!htmlContent.includes('id="btn-version"') || !htmlContent.includes('id="app-version-text"')) {
+    throw new Error('index.html is missing id="btn-version" or id="app-version-text"');
+  }
+
+  console.log(`Test 22: App Version v${APP_VERSION} synchronized across js/version.js, sw.js, and index.html: PASS`);
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }

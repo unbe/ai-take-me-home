@@ -115,6 +115,15 @@
         <button id="btn-open-help" class="settings-link-btn help" type="button">
           <span>ℹ️ How to use &amp; About</span>
         </button>
+
+        <!-- VERSION & UPDATE CHECK -->
+        <div class="settings-version-row">
+          <span class="settings-version-label">Take Me Home</span>
+          <button id="btn-version" class="settings-version-badge" type="button" title="Check for updates">
+            <span id="app-version-text">v1.1</span>
+            <span class="version-update-icon" aria-hidden="true">↻</span>
+          </button>
+        </div>
       </div>
     </section>
 
@@ -206,7 +215,7 @@
             <img src="icons/icon.svg" width="38" height="38" alt="Take Me Home Icon" class="install-modal-icon" />
             <div class="install-modal-titles">
               <h3 id="intro-modal-title" class="install-modal-title">Welcome to Take Me Home!</h3>
-              <span class="install-modal-subtitle">Paragliding &amp; Hang Gliding Transit Navigator</span>
+              <span class="install-modal-subtitle">Paragliding Transit Navigator &bull; <span id="intro-version-text">v1.1</span></span>
             </div>
           </div>
           <button id="btn-close-intro-modal" class="install-modal-close" aria-label="Close dialog">&times;</button>
@@ -265,6 +274,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=5.4"></script>
+  <script type="module" src="js/app.js?v=1.1"></script>
 </body>
 </html>

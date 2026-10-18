@@ -1421,4 +1421,58 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   line-height: 1.35;
 }
 
+/* SETTINGS VERSION BADGE */
+.settings-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 2px 4px;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
+.settings-version-label {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.settings-version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-version-badge:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.settings-version-badge.is-checking .version-update-icon {
+  animation: spin 1s linear infinite;
+}
+
+.version-update-icon {
+  font-size: 0.82rem;
+  display: inline-block;
+  line-height: 1;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+
 

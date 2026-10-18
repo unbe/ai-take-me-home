@@ -1,14 +1,20 @@
 /**
  * sw.js - Service Worker for Take Me Home PWA
  * Provides offline caching for core assets and satisfies PWA installability requirements.
+ *
+ * NOTE: When bumping version in js/version.js, also bump APP_VERSION here!
  */
 
-const CACHE_NAME = 'takemehome-v1';
+const APP_VERSION = '1.1';
+const CACHE_NAME = `takemehome-v${APP_VERSION}`;
+
 const PRECACHE_ASSETS = [
   './',
   'index.html',
   'css/styles.css',
   'js/app.js',
+  'js/version.js',
+  'js/storage.js',
   'js/geo.js',
   'js/map.js',
   'js/overpass.js',
@@ -39,12 +45,19 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[SW] Deleting obsolete cache:', key);
             return caches.delete(key);
           }
         })
       );
     }).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {
