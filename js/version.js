@@ -3,4 +3,4 @@
  *
  * NOTE: Increment the minor version whenever each task is complete, before git commit.
  */
-export const APP_VERSION = '1.3';
+export const APP_VERSION = '1.4';

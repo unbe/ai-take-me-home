@@ -450,6 +450,31 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   transform: scale(0.92);
 }
 
+.fab-btn .locate-icon {
+  color: #38bdf8;
+  display: block;
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.fab-btn:hover .locate-icon {
+  color: #7dd3fc;
+  transform: scale(1.08);
+}
+
+.locate-icon-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  padding: 2px 4px;
+  color: #38bdf8;
+  vertical-align: middle;
+  line-height: 1;
+  margin: 0 2px;
+}
+
 /* ================= LEAFLET CUSTOM MARKERS ================= */
 .custom-pilot-marker {
   display: flex;

@@ -176,8 +176,8 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - Automatically displays on the user's first ever launch (`Storage.hasSeenIntro() === false`).
   - Explains the core pilot workflow:
     1. Setting home destination via map long-press on mobile (or right-click on desktop) ➔ "🏁 Set Destination".
-    2. Setting pilot position: Tap 🎯 for live 3D GPS in flight, or long-press on mobile (right-click on desktop) ➔ "🪂 Set Pilot Position" to simulate any landing spot.
-    3. Reading glide ratio ($L/D$) and timetable connections with 1-tap SBB / Google Maps routing.
+    2. Setting pilot position: Tap 🛰️ for live 3D GPS in flight, or long-press on mobile (right-click on desktop) ➔ "🪂 Set Pilot Position" to simulate any landing spot.
+    3. Reading glide ratio ($L/D$) and timetable connections with direct SBB / Google Maps routing.
     4. Installing home screen shortcuts on mobile.
   - Dismissing the modal ("Got it, let's fly!") calls `Storage.markIntroSeen()`, persisting `takemehome_intro_seen = true` so it does not auto-open again.
   - Accessible on-demand anytime via the "ℹ️ How to use & About" button in the Settings panel (`#input-panel`).
