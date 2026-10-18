@@ -101,6 +101,21 @@
       <div id="install-hint" class="install-hint">
         Saves destination & settings. Uses live GPS when launched.
       </div>
+
+      <!-- FEEDBACK, ISSUE REPORT & HELP -->
+      <div class="settings-footer-section">
+        <a id="link-github-issues" class="settings-link-btn feedback" href="https://github.com/unbe/ai-take-me-home/issues" target="_blank" rel="noopener noreferrer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 16v-4"></path>
+            <path d="M12 8h.01"></path>
+          </svg>
+          <span>Report an issue / Submit an idea ↗</span>
+        </a>
+        <button id="btn-open-help" class="settings-link-btn help" type="button">
+          <span>ℹ️ How to use &amp; About</span>
+        </button>
+      </div>
     </section>
 
     <!-- NON-INTRUSIVE FLOATING PROGRESS BANNER (Leaves map 100% visible) -->
@@ -178,6 +193,63 @@
         </div>
         <div class="install-modal-footer">
           <button id="btn-install-modal-done" class="btn-primary">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FIRST-RUN INTRO & HELP MODAL -->
+    <div id="intro-modal" class="install-modal" style="display: none;" role="dialog" aria-labelledby="intro-modal-title" aria-modal="true">
+      <div class="install-modal-backdrop" id="intro-modal-backdrop"></div>
+      <div class="install-modal-card">
+        <div class="install-modal-header">
+          <div class="install-modal-title-row">
+            <img src="icons/icon.svg" width="38" height="38" alt="Take Me Home Icon" class="install-modal-icon" />
+            <div class="install-modal-titles">
+              <h3 id="intro-modal-title" class="install-modal-title">Welcome to Take Me Home!</h3>
+              <span class="install-modal-subtitle">Paragliding &amp; Hang Gliding Transit Navigator</span>
+            </div>
+          </div>
+          <button id="btn-close-intro-modal" class="install-modal-close" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="install-modal-body">
+          <p class="intro-desc">
+            Instantly finds reachable public transport stops from your landing spot or glide horizon and calculates the fastest public transport route back home.
+          </p>
+
+          <div class="install-step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>Set your Destination (Home)</strong>
+              <div class="step-sub">Tap &amp; hold (long-press) anywhere on the map to place your home destination pin.</div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>Live GPS or Simulated Position</strong>
+              <div class="step-sub">Tap 🎯 to acquire your current 3D GPS position and altitude, or drag the pilot pin anywhere to simulate landing.</div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>Inspect Stops &amp; Timetables</strong>
+              <div class="step-sub">Colored markers show stops ranked by arrival time. Tap any stop to see glide ratio (L/D), departure times, and direct 1-tap links to SBB / Google Maps.</div>
+            </div>
+          </div>
+
+          <div class="install-step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <strong>Install Shortcut on Mobile</strong>
+              <div class="step-sub">Open ⚙️ Settings and tap <em>"Install and create shortcut"</em> for 1-tap navigation whenever you land.</div>
+            </div>
+          </div>
+        </div>
+        <div class="install-modal-footer">
+          <button id="btn-intro-modal-done" class="btn-primary">Got it, let's fly!</button>
         </div>
       </div>
     </div>

@@ -9,6 +9,32 @@
 
 export const Storage = {
   STORAGE_KEY: 'takemehome_config',
+  INTRO_SEEN_KEY: 'takemehome_intro_seen',
+
+  /**
+   * Checks whether the user has already seen the first-launch introduction
+   * @returns {boolean}
+   */
+  hasSeenIntro() {
+    if (typeof localStorage === 'undefined') return false;
+    try {
+      return localStorage.getItem(this.INTRO_SEEN_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Marks that the user has seen the first-launch introduction
+   */
+  markIntroSeen() {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(this.INTRO_SEEN_KEY, 'true');
+    } catch (err) {
+      console.warn('[Storage] Failed to save intro seen flag:', err);
+    }
+  },
 
   /**
    * Saves destination and settings to persistent local storage.

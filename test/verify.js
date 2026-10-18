@@ -857,6 +857,15 @@ async function runTests() {
   if (parsedUrl.searchParams.get('destLat') !== '46.94800' || parsedUrl.searchParams.get('glide') !== '7.5') {
     throw new Error(`Clean shortcut URL missing destination or settings: ${cleanUrl}`);
   }
+  // Intro seen check & mark
+  if (Storage.hasSeenIntro()) {
+    throw new Error('Storage.hasSeenIntro() should be false initially');
+  }
+  Storage.markIntroSeen();
+  if (!Storage.hasSeenIntro()) {
+    throw new Error('Storage.hasSeenIntro() should be true after markIntroSeen()');
+  }
+
   console.log(`Test 21: Storage & Clean Shortcut URL = ${cleanUrl}`);
   console.log('Test 21: Storage module & clean shortcut URL: PASS');
 

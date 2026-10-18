@@ -82,6 +82,13 @@ const UI = {
   installModalBody: document.getElementById('install-modal-body'),
   btnCloseInstallModal: document.getElementById('btn-close-install-modal'),
   btnInstallModalDone: document.getElementById('btn-install-modal-done'),
+
+  // Help & Intro Modal
+  btnOpenHelp: document.getElementById('btn-open-help'),
+  introModal: document.getElementById('intro-modal'),
+  introModalBackdrop: document.getElementById('intro-modal-backdrop'),
+  btnCloseIntroModal: document.getElementById('btn-close-intro-modal'),
+  btnIntroModalDone: document.getElementById('btn-intro-modal-done'),
 };
 
 /**
@@ -955,6 +962,22 @@ async function handleInstallShortcut() {
 }
 
 /**
+ * First-Run Intro & Help Modal
+ */
+function openIntroModal() {
+  if (UI.introModal) {
+    UI.introModal.style.display = 'flex';
+  }
+}
+
+function closeIntroModal() {
+  Storage.markIntroSeen();
+  if (UI.introModal) {
+    UI.introModal.style.display = 'none';
+  }
+}
+
+/**
  * Initialize event listeners
  */
 function initEvents() {
@@ -979,6 +1002,23 @@ function initEvents() {
   }
   if (UI.installModalBackdrop) {
     UI.installModalBackdrop.addEventListener('click', closeInstallModal);
+  }
+
+  // Help & Intro modal events
+  if (UI.btnOpenHelp) {
+    UI.btnOpenHelp.addEventListener('click', () => {
+      closeInputPanel();
+      openIntroModal();
+    });
+  }
+  if (UI.btnCloseIntroModal) {
+    UI.btnCloseIntroModal.addEventListener('click', closeIntroModal);
+  }
+  if (UI.btnIntroModalDone) {
+    UI.btnIntroModalDone.addEventListener('click', closeIntroModal);
+  }
+  if (UI.introModalBackdrop) {
+    UI.introModalBackdrop.addEventListener('click', closeIntroModal);
   }
 
   // Live input changes update persistent settings
@@ -1106,6 +1146,11 @@ async function init() {
           console.warn('[PWA] ServiceWorker registration failed:', err);
         });
     });
+  }
+
+  // 4. Show intro modal on first ever launch for this user
+  if (!Storage.hasSeenIntro()) {
+    openIntroModal();
   }
 
   if (pilotSetInUrl) {

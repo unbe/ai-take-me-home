@@ -1306,3 +1306,119 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   width: 100%;
 }
 
+/* SETTINGS FOOTER LINKS */
+.settings-footer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-link-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.settings-link-btn.feedback {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.settings-link-btn.feedback:hover {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+}
+
+.settings-link-btn.help {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.intro-desc {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+  margin: 0 0 14px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.install-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.step-num {
+  background: #38bdf8;
+  color: #0f172a;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.step-content {
+  flex: 1;
+  font-size: 0.85rem;
+  color: #f1f5f9;
+  line-height: 1.35;
+}
+
+.step-content strong {
+  color: #38bdf8;
+}
+
+.step-sub {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
+.install-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: #bae6fd;
+  line-height: 1.35;
+}
+
+

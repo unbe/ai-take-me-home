@@ -171,3 +171,15 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - `js/storage.js`: Centralized manager for persistent configuration, platform detection (`detectPlatform`), standalone mode checking (`isStandalone`), and clean shortcut URL generation.
   - `#install-modal`: Native-feeling instruction modal tailored with step-by-step visual guidance for iOS Safari and Chromium.
 
+### L. First-Launch Onboarding & Community Feedback Link
+- **First-Run Onboarding (`#intro-modal`)**:
+  - Automatically displays on the user's first ever launch (`Storage.hasSeenIntro() === false`).
+  - Explains the core pilot workflow:
+    1. Setting home destination via map long-press.
+    2. Using live GPS (🎯) in flight or dragging the pilot pin to simulate landing spots.
+    3. Reading glide ratio ($L/D$) and timetable connections with 1-tap SBB / Google Maps routing.
+    4. Installing home screen shortcuts on mobile.
+  - Dismissing the modal ("Got it, let's fly!") calls `Storage.markIntroSeen()`, persisting `takemehome_intro_seen = true` so it does not auto-open again.
+  - Accessible on-demand anytime via the "ℹ️ How to use & About" button in the Settings panel (`#input-panel`).
+- **Community Bug Tracker / Feedback Link**:
+  - Positioned in the Settings panel footer (`#link-github-issues`), linking directly to `https://github.com/unbe/ai-take-me-home/issues` with `target="_blank" rel="noopener noreferrer"` for pilots to report bugs or submit feature ideas.
