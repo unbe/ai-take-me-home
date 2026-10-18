@@ -202,20 +202,36 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
     3. Client listens for `navigator.serviceWorker.oncontrollerchange` and reloads (`window.location.reload()`) to immediately render updated HTML/JS assets.
 
 ### N. Mobile PWA GPS Icon & Viewport Safe-Area Layout
-- **The Issue**: On mobile PWA / Safari, the floating GPS ("Locate me") button appeared half cut off or clipped at the bottom of the screen. Later, after initial safe-area fixes, it appeared too high above the bottom bar.
+- **The Issue**: On mobile PWA / Safari, the floating GPS ("Locate me") button and Leaflet footer appeared cut off or hidden behind the system navigation bar, while simultaneously appearing normal in mobile Chrome.
 - **Root Causes & Solutions**:
-  1. **The PWA Stale Cache Divergence Mystery**:
-     - When updates are deployed, mobile browser tabs (like mobile Chrome) fetch new HTML/CSS bundles immediately over the network.
+  1. **The PWA Edge-to-Edge Navigation Bar Trap**:
+     - In **mobile Chrome (browser tab)**, the browser window terminates *above* the Android system navigation bar / gesture area. Thus `bottom: 0` sits cleanly above the system bar.
+     - In **standalone PWA mode (WebAPK)**, Android draws the webview edge-to-edge *behind* the ~48px system navigation bar. Crucially, Android WebAPKs frequently fail to report navigation bar heights to `env(safe-area-inset-bottom)`, leaving it evaluating to `0px`.
+     - When elements were placed at `bottom: 0` (Leaflet attribution) and `bottom: 12px` (GPS button), the 48px system navigation bar completely concealed the Leaflet footer, leaving only ~1mm of the 48px GPS button peeking out above the bar.
+  2. **Dual-Context `--safe-bottom` Architecture**:
+     - Defined a dynamic CSS custom property `--safe-bottom`:
+       ```css
+       :root {
+         --safe-bottom: env(safe-area-inset-bottom, 0px);
+       }
+       @media (display-mode: standalone) {
+         :root {
+           --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
+         }
+       }
+       html.is-standalone {
+         --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
+       }
+       ```
+     - In mobile Chrome / desktop, `--safe-bottom` is `0px`, preserving the natural, compact layout without unnecessary empty gaps.
+     - In standalone PWA, `--safe-bottom` enforces at least `48px` clearance (or hardware safe area, whichever is larger), cleanly lifting all bottom UI above the Android system navigation bar.
+  3. **Leaflet Footer & Floating Elements Integration**:
+     - `.leaflet-bottom`: Set to `bottom: var(--safe-bottom) !important;` so Leaflet's attribution bar floats above the navigation bar in PWAs.
+     - `.fab-gps-container` & `.tapped-stop-card`: Set to `bottom: calc(12px + var(--safe-bottom));`, ensuring a neat, consistent 12px margin above the navigation bar in standalone PWAs and 12px above bottom in browser tabs.
+  4. **The PWA Stale Cache Divergence**:
+     - When updates are deployed, mobile browser tabs fetch new HTML/CSS bundles immediately over the network.
      - In contrast, standalone installed PWAs (WebAPK on Android or standalone WebApp on iOS) often keep the previous version's Service Worker and stylesheet running in memory until the application process is completely closed and restarted.
-     - This produced a confusing intermediate state where mobile Chrome ran the new elevated CSS while the PWA was still running the older pre-update stylesheet (with missing Leaflet footer and clipped icons). Force-restarting the PWA immediately aligned both onto the latest version.
-  2. **Safe-Area Math & Bottom Offset Tuning**:
-     - Using `calc(24px + env(safe-area-inset-bottom, 0px))` added 24px ON TOP of device safe-area insets (e.g. 34px on iPhones or gesture navigation bars), pushing the button ~58px above the screen bottom—enough for an entire second button to fit underneath.
-     - Tuned to `bottom: calc(12px + env(safe-area-inset-bottom, 0px))` and `left: calc(14px + env(safe-area-inset-left, 0px))`. This provides a compact, clean 12px breathing margin above the device gesture bar/bottom edge without wasting vertical map real estate.
-     - Explicitly styled `html` with `width: 100%; height: 100%; height: 100dvh;` alongside `body` and `.app-container` for consistent dynamic viewport boundaries across standalone PWAs and mobile browsers.
-  3. **Cache Invalidation for Stylesheets**:
-     - Tied `<link rel="stylesheet" href="css/styles.css?v=...">` directly to `APP_VERSION` to ensure browser HTTP caches invalidate immediately whenever versions bump.
-  4. **Z-Index Layering vs. Leaflet Controls**:
-     - Raised `.fab-gps-container` to `z-index: 1100` and constrained Leaflet attribution with `max-width: calc(100vw - 90px)` with ellipsis truncation to avoid overlapping on narrow screens.
+     - Tied `<link rel="stylesheet" href="css/styles.css?v=...">` directly to `APP_VERSION` so WebViews never reuse stale cached CSS.
   5. **Mobile WebKit Button UA Reset & Icon Standardization**:
      - Added `appearance: none; -webkit-appearance: none; padding: 0; margin: 0; min-width: 48px; min-height: 48px; border-radius: 50%; overflow: visible;` to `.fab-btn`.
      - Standardized on the 4-tick target crosshair SVG icon (`<circle cx="12" cy="12" r="7">`, inner `<circle cx="12" cy="12" r="2.5">`, and 4 axis lines) across both `#btn-gps` and the welcome onboarding modal (`.locate-icon-inline`).

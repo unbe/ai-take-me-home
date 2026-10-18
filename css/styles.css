@@ -20,6 +20,19 @@
 
   --border-subtle: rgba(255, 255, 255, 0.1);
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+
+  /* Safe bottom inset (0px in browser, min 48px in standalone PWA to clear system nav bar) */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
+  }
+}
+
+html.is-standalone {
+  --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
 }
 
 * {
@@ -430,12 +443,12 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   position: absolute;
   left: 14px;
   left: calc(14px + env(safe-area-inset-left, 0px));
-  bottom: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12px + var(--safe-bottom));
   z-index: 1100;
   display: flex;
   flex-direction: column;
   pointer-events: auto;
+  transition: bottom 0.2s ease;
 }
 
 .fab-btn {
@@ -501,6 +514,11 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   display: block;
   flex-shrink: 0;
   overflow: visible;
+}
+
+.leaflet-bottom {
+  bottom: var(--safe-bottom) !important;
+  transition: bottom 0.2s ease;
 }
 
 .leaflet-control-attribution {
@@ -927,8 +945,7 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
 /* FLOATING DETAILS BOX FOR TAPPED STOP */
 .tapped-stop-card {
   position: absolute;
-  bottom: 24px;
-  bottom: max(24px, env(safe-area-inset-bottom));
+  bottom: calc(12px + var(--safe-bottom));
   left: 14px;
   right: 14px;
   background: rgba(15, 23, 42, 0.96);

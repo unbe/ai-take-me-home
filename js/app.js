@@ -8,7 +8,7 @@ import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
 import { Storage } from './storage.js?v=3.1';
-import { APP_VERSION } from './version.js?v=1.7';
+import { APP_VERSION } from './version.js?v=1.8';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
@@ -1156,6 +1156,11 @@ function initEvents() {
  */
 async function init() {
   console.log('[Take Me Home] Initializing application...');
+
+  // Mark document as standalone PWA if running installed
+  if (Storage.isStandalone()) {
+    document.documentElement.classList.add('is-standalone');
+  }
 
   // 1. Load persistent config from localStorage (saved destination & settings, NO pilot coordinates)
   const savedConfig = Storage.loadConfig();
