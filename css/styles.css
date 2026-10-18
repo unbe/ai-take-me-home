@@ -29,13 +29,19 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  height: 100vh;
+  height: 100%;
   height: 100dvh;
-  width: 100vw;
+  width: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -424,8 +430,8 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   position: absolute;
   left: 14px;
   left: calc(14px + env(safe-area-inset-left, 0px));
-  bottom: 24px;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  bottom: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: 1100;
   display: flex;
   flex-direction: column;

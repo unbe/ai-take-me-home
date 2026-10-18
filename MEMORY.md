@@ -202,22 +202,22 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
     3. Client listens for `navigator.serviceWorker.oncontrollerchange` and reloads (`window.location.reload()`) to immediately render updated HTML/JS assets.
 
 ### N. Mobile PWA GPS Icon & Viewport Safe-Area Layout
-- **The Issue**: On mobile PWA / Safari, the floating GPS ("Locate me") button appeared half cut off or clipped at the bottom of the screen.
+- **The Issue**: On mobile PWA / Safari, the floating GPS ("Locate me") button appeared half cut off or clipped at the bottom of the screen. Later, after initial safe-area fixes, it appeared too high above the bottom bar.
 - **Root Causes & Solutions**:
-  1. **Safe-Area Math (`env(safe-area-inset-bottom)`)**:
-     - `.fab-gps-container` previously used `bottom: max(24px, env(safe-area-inset-bottom))`.
-     - On iPhone PWAs with a 34px bottom home indicator, `max(24px, 34px)` evaluated to only 34px above the physical bottom glass. With a 48px button, the lower half overlapped the home indicator and bottom screen edge.
-     - Fixed by using additive insets: `bottom: calc(24px + env(safe-area-inset-bottom, 0px))` and `left: calc(14px + env(safe-area-inset-left, 0px))`, positioning the button safely above the home indicator.
-     - Added `height: 100dvh` on `.app-container` to maintain accurate viewport height during mobile dynamic address bar shifts.
-  2. **Z-Index Layering vs. Leaflet Controls**:
-     - `.fab-gps-container` originally had `z-index: 10`, while Leaflet attribution and map controls have `z-index: 1000`.
-     - On narrow mobile viewports (<400px), Leaflet's bottom-right attribution bar wrapped across the screen width and occluded the left-side button.
-     - Raised container to `z-index: 1100` and constrained attribution width via `max-width: calc(100vw - 90px)` with ellipsis truncation.
-  3. **Mobile WebKit Button UA Reset**:
-     - iOS WebKit `<button>` styling applies native padding and vertical alignment that can slice or displace child SVGs.
+  1. **The PWA Stale Cache Divergence Mystery**:
+     - When updates are deployed, mobile browser tabs (like mobile Chrome) fetch new HTML/CSS bundles immediately over the network.
+     - In contrast, standalone installed PWAs (WebAPK on Android or standalone WebApp on iOS) often keep the previous version's Service Worker and stylesheet running in memory until the application process is completely closed and restarted.
+     - This produced a confusing intermediate state where mobile Chrome ran the new elevated CSS while the PWA was still running the older pre-update stylesheet (with missing Leaflet footer and clipped icons). Force-restarting the PWA immediately aligned both onto the latest version.
+  2. **Safe-Area Math & Bottom Offset Tuning**:
+     - Using `calc(24px + env(safe-area-inset-bottom, 0px))` added 24px ON TOP of device safe-area insets (e.g. 34px on iPhones or gesture navigation bars), pushing the button ~58px above the screen bottom—enough for an entire second button to fit underneath.
+     - Tuned to `bottom: calc(12px + env(safe-area-inset-bottom, 0px))` and `left: calc(14px + env(safe-area-inset-left, 0px))`. This provides a compact, clean 12px breathing margin above the device gesture bar/bottom edge without wasting vertical map real estate.
+     - Explicitly styled `html` with `width: 100%; height: 100%; height: 100dvh;` alongside `body` and `.app-container` for consistent dynamic viewport boundaries across standalone PWAs and mobile browsers.
+  3. **Cache Invalidation for Stylesheets**:
+     - Tied `<link rel="stylesheet" href="css/styles.css?v=...">` directly to `APP_VERSION` to ensure browser HTTP caches invalidate immediately whenever versions bump.
+  4. **Z-Index Layering vs. Leaflet Controls**:
+     - Raised `.fab-gps-container` to `z-index: 1100` and constrained Leaflet attribution with `max-width: calc(100vw - 90px)` with ellipsis truncation to avoid overlapping on narrow screens.
+  5. **Mobile WebKit Button UA Reset & Icon Standardization**:
      - Added `appearance: none; -webkit-appearance: none; padding: 0; margin: 0; min-width: 48px; min-height: 48px; border-radius: 50%; overflow: visible;` to `.fab-btn`.
-     - Configured SVG `.locate-icon` and `.locate-icon-inline` with `overflow: visible; flex-shrink: 0; margin: auto;` to eliminate line-box and flex clipping.
-  4. **Icon Standardization**:
      - Standardized on the 4-tick target crosshair SVG icon (`<circle cx="12" cy="12" r="7">`, inner `<circle cx="12" cy="12" r="2.5">`, and 4 axis lines) across both `#btn-gps` and the welcome onboarding modal (`.locate-icon-inline`).
 
 ### O. Map Base Layers & Decommissioning of OpenTopoMap
