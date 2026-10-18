@@ -7,6 +7,7 @@ import { Overpass } from './overpass.js?v=3.1';
 import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
+import { Storage } from './storage.js?v=3.1';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
@@ -72,6 +73,15 @@ const UI = {
   inputSpeed: document.getElementById('input-speed'),
   inputBuffer: document.getElementById('input-buffer'),
   inputGlideThreshold: document.getElementById('input-glide-threshold'),
+
+  // Install / Shortcut
+  btnInstallShortcut: document.getElementById('btn-install-shortcut'),
+  installHint: document.getElementById('install-hint'),
+  installModal: document.getElementById('install-modal'),
+  installModalBackdrop: document.getElementById('install-modal-backdrop'),
+  installModalBody: document.getElementById('install-modal-body'),
+  btnCloseInstallModal: document.getElementById('btn-close-install-modal'),
+  btnInstallModalDone: document.getElementById('btn-install-modal-done'),
 };
 
 /**
@@ -234,6 +244,7 @@ function syncStateFromInputs() {
 
   syncInputsFromState();
   updateUrlFromState();
+  Storage.saveConfig(State.destination, State.settings);
 }
 
 /**
@@ -247,6 +258,7 @@ async function updateDestinationAddress() {
     // Ignore stale results if the destination moved while the lookup was in flight
     if (address && State.destination.lat === lat && State.destination.lon === lon) {
       State.destination.address = address;
+      Storage.saveConfig(State.destination, State.settings);
       if (currentlyTappedStop) {
         showTappedStopCard(currentlyTappedStop, currentlyTappedRank);
       }
@@ -841,6 +853,108 @@ async function calculateRoutes(options = {}) {
 }
 
 /**
+ * PWA Installation & Shortcut Management
+ */
+let deferredInstallPrompt = null;
+
+function openInstallModal() {
+  if (!UI.installModal) return;
+  const platform = Storage.detectPlatform();
+  let instructionsHtml = '';
+
+  if (platform === 'ios') {
+    instructionsHtml = `
+      <div class="install-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Tap the Share button</strong> in Safari toolbar
+          <div class="step-sub">Look for the square icon with an arrow pointing upward (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;display:inline-block"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>) at bottom or top of your screen.</div>
+        </div>
+      </div>
+      <div class="install-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Select "Add to Home Screen"</strong>
+          <div class="step-sub">Scroll down in the share sheet and tap <em>Add to Home Screen</em> (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;display:inline-block"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>).</div>
+        </div>
+      </div>
+      <div class="install-step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Tap "Add" in the top-right corner</strong>
+          <div class="step-sub">A dedicated shortcut icon will appear on your Home Screen.</div>
+        </div>
+      </div>
+      <div class="install-note">
+        <strong>💡 Live GPS:</strong> When launched from your Home Screen, the app will instantly acquire your live GPS position and altitude to route you to your saved destination.
+      </div>
+    `;
+  } else {
+    instructionsHtml = `
+      <div class="install-step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Tap the browser menu</strong>
+          <div class="step-sub">Look for the three vertical dots (<strong>⋮</strong>) in the top-right corner of Chrome.</div>
+        </div>
+      </div>
+      <div class="install-step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Select "Add to Home screen" or "Install app"</strong>
+          <div class="step-sub">Confirm the prompt to install the fast shortcut.</div>
+        </div>
+      </div>
+      <div class="install-note">
+        <strong>💡 Live GPS:</strong> When launched from your Home Screen, the app will instantly acquire your live GPS position and altitude to route you to your saved destination.
+      </div>
+    `;
+  }
+
+  if (UI.installModalBody) {
+    UI.installModalBody.innerHTML = instructionsHtml;
+  }
+  UI.installModal.style.display = 'flex';
+}
+
+function closeInstallModal() {
+  if (UI.installModal) {
+    UI.installModal.style.display = 'none';
+  }
+}
+
+async function handleInstallShortcut() {
+  syncStateFromInputs();
+  // Always prepare clean URL and save destination & settings
+  Storage.prepareForShortcutCreation(State.destination, State.settings);
+
+  // If already running standalone
+  if (Storage.isStandalone()) {
+    showToast('✨ Running as installed app! Settings & destination stay automatically synced.', 4000);
+    return;
+  }
+
+  // If native browser prompt is available (Android Chrome / Edge / Chromium)
+  if (deferredInstallPrompt) {
+    try {
+      deferredInstallPrompt.prompt();
+      const choiceResult = await deferredInstallPrompt.userChoice;
+      console.log('[PWA] User choice:', choiceResult.outcome);
+      if (choiceResult.outcome === 'accepted') {
+        showToast('🎉 App shortcut installed to your Home Screen!', 4000);
+      }
+      deferredInstallPrompt = null;
+    } catch (err) {
+      console.warn('[PWA] Prompt error:', err);
+      openInstallModal();
+    }
+  } else {
+    // iOS Safari or browsers where prompt cannot be triggered programmatically
+    openInstallModal();
+  }
+}
+
+/**
  * Initialize event listeners
  */
 function initEvents() {
@@ -853,6 +967,50 @@ function initEvents() {
     calculateRoutes();
   });
   UI.btnGps.addEventListener('click', () => useCurrentLocation());
+
+  if (UI.btnInstallShortcut) {
+    UI.btnInstallShortcut.addEventListener('click', handleInstallShortcut);
+  }
+  if (UI.btnCloseInstallModal) {
+    UI.btnCloseInstallModal.addEventListener('click', closeInstallModal);
+  }
+  if (UI.btnInstallModalDone) {
+    UI.btnInstallModalDone.addEventListener('click', closeInstallModal);
+  }
+  if (UI.installModalBackdrop) {
+    UI.installModalBackdrop.addEventListener('click', closeInstallModal);
+  }
+
+  // Live input changes update persistent settings
+  [
+    UI.inputStopsCount,
+    UI.inputSearchRadius,
+    UI.inputSpeed,
+    UI.inputBuffer,
+    UI.inputGlideThreshold,
+  ].forEach((input) => {
+    if (input) {
+      input.addEventListener('change', () => {
+        syncStateFromInputs();
+      });
+    }
+  });
+
+  // PWA install prompt listeners
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    console.log('[PWA] Captured beforeinstallprompt event');
+    if (UI.btnInstallShortcut) {
+      UI.btnInstallShortcut.classList.add('is-promoted');
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    console.log('[PWA] Application installed successfully');
+    showToast('🎉 Shortcut created on your Home Screen!', 4000);
+  });
 
   if (UI.btnCloseTappedCard) {
     UI.btnCloseTappedCard.addEventListener('click', hideTappedStopCard);
@@ -888,6 +1046,7 @@ function initEvents() {
     updateDestinationAddress();
     syncInputsFromState();
     updateUrlFromState();
+    Storage.saveConfig(State.destination, State.settings);
     showToast(`🏁 Destination set to ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
     calculateRoutes();
   };
@@ -908,9 +1067,26 @@ function initEvents() {
 async function init() {
   console.log('[Take Me Home] Initializing application...');
 
+  // 1. Load persistent config from localStorage (saved destination & settings, NO pilot coordinates)
+  const savedConfig = Storage.loadConfig();
+  if (savedConfig) {
+    if (savedConfig.destination) {
+      State.destination.lat = savedConfig.destination.lat;
+      State.destination.lon = savedConfig.destination.lon;
+      if (savedConfig.destination.address) {
+        State.destination.address = savedConfig.destination.address;
+      }
+    }
+    if (savedConfig.settings) {
+      Object.assign(State.settings, savedConfig.settings);
+    }
+  }
+
+  // 2. URL parameters override stored config (e.g. if a shared link or test URL is opened)
   const { pilotSetInUrl } = parseStateFromUrl();
   syncInputsFromState();
   updateUrlFromState();
+  Storage.saveConfig(State.destination, State.settings);
   updateDestinationAddress();
 
   // Center map around pilot position FIRST
@@ -918,6 +1094,19 @@ async function init() {
   MapManager.setPilotMarker(State.pilot.lat, State.pilot.lon, State.pilot.altM);
   MapManager.setDestinationMarker(State.destination.lat, State.destination.lon);
   initEvents();
+
+  // 3. Register Service Worker for PWA offline app shell & shortcut capability
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then((reg) => {
+          console.log('[PWA] ServiceWorker registered with scope:', reg.scope);
+        })
+        .catch((err) => {
+          console.warn('[PWA] ServiceWorker registration failed:', err);
+        });
+    });
+  }
 
   if (pilotSetInUrl) {
     // Current position and altitude set in URL -> DO NOT query GPS!

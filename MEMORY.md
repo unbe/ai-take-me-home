@@ -158,10 +158,16 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
   - **Timezone Offset Compensation (`!7e2`)**: The `!7e2` flag instructs Google Maps to interpret the `!8j` timestamp as seconds since 1970-01-01 in the *local* timezone rather than UTC. Therefore, JavaScript's UTC timestamp must be compensated via `d.getTime() - d.getTimezoneOffset() * 60000` so that the local wall-clock time (e.g. 20:00 CEST, UTC+2) matches Google Maps' rendered departure time without a 2-hour drift.
   - Fallback: If no departure date is supplied, falls back to `https://www.google.com/maps/dir/?api=1&origin=...&destination=...&travelmode=transit`.
 
-
-
-
-
-
-
+### K. Mobile PWA Installation, Shortcut Creation & Persistent Configuration
+- **The Requirement**: Mobile pilots need a fast 1-tap Home Screen shortcut to immediately route home from wherever they land.
+- **Critical Architectural Rules**:
+  1. **Never Save Pilot Position in Shortcuts**: The shortcut must **never** save the pilot's takeoff or current coordinates (`lat`, `lon`, `altM`). When the shortcut or PWA launches, `pilotSetInUrl` is `false`, triggering `useCurrentLocation()` to automatically acquire a fresh 3D GPS fix and elevation.
+  2. **Persist Destination & Flight Settings**: Destination coordinates, geocoded address, and user settings (`stopsCount`, `searchRadiusKm`, `speedKmH`, `bufferMinutes`, `maxGlideRatio`) are saved in `localStorage` under `takemehome_config`.
+  3. **Continuous Shortcut Synchronization**: Modifying settings or setting a new destination updates `localStorage` and cleans the URL (`Storage.saveConfig` / `Storage.prepareForShortcutCreation`). Because PWA standalone windows and browser shortcuts share the same origin storage, existing shortcuts automatically reflect new destinations without needing reinstallation.
+  4. **iOS Safari Bookmark URL Sanitization**: Safari's native "Add to Home Screen" captures the current `window.location.href`. To prevent Safari from baking current coordinates into the bookmark, `Storage.prepareForShortcutCreation` executes `history.replaceState` with a clean URL (retaining only `destLat`, `destLon`, and settings) prior to user interaction.
+- **Components**:
+  - `manifest.json`: Web App Manifest with `start_url: "./"`, `display: "standalone"`, and branded SVG/PNG icons.
+  - `sw.js`: Service worker providing app-shell caching for offline startup capability while bypassing live timetable and elevation APIs.
+  - `js/storage.js`: Centralized manager for persistent configuration, platform detection (`detectPlatform`), standalone mode checking (`isStandalone`), and clean shortcut URL generation.
+  - `#install-modal`: Native-feeling instruction modal tailored with step-by-step visual guidance for iOS Safari and Chromium.
 

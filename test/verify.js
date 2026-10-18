@@ -7,6 +7,7 @@ import { Transit } from '../js/transit.js';
 import { Elevation } from '../js/elevation.js';
 import { Overpass } from '../js/overpass.js';
 import { computeTiers } from '../js/tiers.js';
+import { Storage } from '../js/storage.js';
 
 async function runTests() {
   console.log('=== Starting Unit & Geodesic Tests ===');
@@ -805,6 +806,59 @@ async function runTests() {
   }
 
   console.log('Test 20: Effective time parsing & combined density scoring: PASS');
+
+  // Test 21: Storage module & clean shortcut URL generation
+  const mockStorage = {
+    _store: {},
+    setItem(k, v) { this._store[k] = String(v); },
+    getItem(k) { return Object.prototype.hasOwnProperty.call(this._store, k) ? this._store[k] : null; },
+    removeItem(k) { delete this._store[k]; },
+    clear() { this._store = {}; }
+  };
+  global.localStorage = mockStorage;
+
+  const testDest = { lat: 46.9480, lon: 7.4474, address: 'Bern, Switzerland' };
+  const testSettings = {
+    stopsCount: 12,
+    searchRadiusKm: 10,
+    speedKmH: 35,
+    bufferMinutes: 25,
+    maxGlideRatio: 7.5,
+  };
+  const testPilot = { lat: 46.6863, lon: 7.8632, altM: 1600 }; // Pilot must NEVER be saved!
+
+  // Save config
+  Storage.saveConfig(testDest, testSettings);
+
+  // Verify raw stored item doesn't contain pilot lat/lon/alt
+  const rawSaved = JSON.parse(mockStorage.getItem(Storage.STORAGE_KEY));
+  if (rawSaved.pilot || rawSaved.lat || rawSaved.alt || rawSaved.altM) {
+    throw new Error('Storage saved pilot data when it must NOT save pilot position or altitude!');
+  }
+  if (rawSaved.destination.lat !== 46.948 || rawSaved.destination.address !== 'Bern, Switzerland') {
+    throw new Error(`Storage did not save destination correctly: ${JSON.stringify(rawSaved)}`);
+  }
+  if (rawSaved.settings.stopsCount !== 12 || rawSaved.settings.maxGlideRatio !== 7.5) {
+    throw new Error(`Storage did not save settings correctly: ${JSON.stringify(rawSaved)}`);
+  }
+
+  // Load config
+  const loaded = Storage.loadConfig();
+  if (!loaded || !loaded.destination || loaded.destination.lat !== 46.948 || loaded.settings.bufferMinutes !== 25) {
+    throw new Error(`Storage.loadConfig failed: ${JSON.stringify(loaded)}`);
+  }
+
+  // Clean shortcut URL generation
+  const cleanUrl = Storage.getCleanShortcutUrl(testDest, testSettings);
+  const parsedUrl = new URL(cleanUrl, 'http://localhost');
+  if (parsedUrl.searchParams.has('lat') || parsedUrl.searchParams.has('lon') || parsedUrl.searchParams.has('alt')) {
+    throw new Error(`Clean shortcut URL must not contain pilot coordinates or altitude: ${cleanUrl}`);
+  }
+  if (parsedUrl.searchParams.get('destLat') !== '46.94800' || parsedUrl.searchParams.get('glide') !== '7.5') {
+    throw new Error(`Clean shortcut URL missing destination or settings: ${cleanUrl}`);
+  }
+  console.log(`Test 21: Storage & Clean Shortcut URL = ${cleanUrl}`);
+  console.log('Test 21: Storage module & clean shortcut URL: PASS');
 
   console.log('✅ ALL GEODESIC AND FORMULA TESTS PASSED!');
 }

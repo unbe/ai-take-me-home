@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ef4444" />
+      <stop offset="100%" stop-color="#b91c1c" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)" />
+  <rect width="504" height="504" x="4" y="4" rx="104" fill="none" stroke="#334155" stroke-width="4" />
+  
+  <!-- Paraglider Canopy (Arc) -->
+  <path d="M 64,180 C 120,70 392,70 448,180 C 370,140 142,140 64,180 Z" fill="url(#wing)" />
+  
+  <!-- Canopy Cell Ribs -->
+  <path d="M 140,110 Q 155,145 160,155" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.4" />
+  <path d="M 210,95 Q 215,135 220,150" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.4" />
+  <path d="M 302,95 Q 297,135 292,150" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.4" />
+  <path d="M 372,110 Q 357,145 352,155" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.4" />
+
+  <!-- Suspension Lines -->
+  <line x1="84" y1="172" x2="256" y2="280" stroke="#94a3b8" stroke-width="2.5" opacity="0.8" />
+  <line x1="160" y1="155" x2="256" y2="280" stroke="#94a3b8" stroke-width="2.5" opacity="0.8" />
+  <line x1="230" y1="148" x2="256" y2="280" stroke="#94a3b8" stroke-width="2.5" opacity="0.8" />
+  <line x1="282" y1="148" x2="256" y2="280" stroke="#94a3b8" stroke-width="2.5" opacity="0.8" />
+  <line x1="352" y1="155" x2="256" y2="280" stroke="#94a3b8" stroke-width="2.5" opacity="0.8" />
+  <line x1="428" y1="172" x2="256" y2="280" stroke="#94a3b8" stroke-width="2.5" opacity="0.8" />
+
+  <!-- Pilot Figure / Harness -->
+  <circle cx="256" cy="272" r="14" fill="#38bdf8" />
+  <ellipse cx="256" cy="296" rx="18" ry="14" fill="#0284c7" />
+
+  <!-- Mountain / Landscape Silhouette -->
+  <path d="M 40,430 L 140,330 L 220,390 L 320,300 L 472,430 Z" fill="#1e293b" opacity="0.9" />
+  <path d="M 140,330 L 170,360 L 125,370 Z" fill="#e2e8f0" opacity="0.7" />
+  <path d="M 320,300 L 350,340 L 300,345 Z" fill="#e2e8f0" opacity="0.7" />
+
+  <!-- Home / Destination Marker at bottom center -->
+  <g transform="translate(256, 400)">
+    <!-- Destination Pin -->
+    <path d="M 0,-40 C -18,-40 -32,-26 -32,-8 C -32,16 0,42 0,42 C 0,42 32,16 32,-8 C 32,-26 18,-40 0,-40 Z" fill="url(#pin)" />
+    <!-- Pin Interior Icon (Home) -->
+    <path d="M -12,-6 L 0,-18 L 12,-6 L 12,8 L 4,8 L 4,0 L -4,0 L -4,8 L -12,8 Z" fill="#ffffff" />
+  </g>
+</svg>

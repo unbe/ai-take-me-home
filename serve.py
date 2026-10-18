@@ -40,6 +40,8 @@ class CustomHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Cache-Control', 'no-cache, must-revalidate')
+        if hasattr(self, 'path') and ('sw.js' in self.path):
+            self.send_header('Service-Worker-Allowed', '/')
         super().end_headers()
 
     def guess_type(self, path):
@@ -49,6 +51,10 @@ class CustomHTTPHandler(http.server.SimpleHTTPRequestHandler):
             return 'text/css'
         if path.endswith('.html'):
             return 'text/html'
+        if path.endswith('manifest.json') or path.endswith('.webmanifest'):
+            return 'application/manifest+json'
+        if path.endswith('.svg'):
+            return 'image/svg+xml'
         return super().guess_type(path)
 
 class ReusableHTTPServer(http.server.HTTPServer):

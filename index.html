@@ -14,8 +14,15 @@
   <!-- MapLibre GL CSS (for Mapterhorn terrain rendering) -->
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 
+  <!-- Web App Manifest & Mobile Icons -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="TakeMeHome" />
+  <meta name="application-name" content="Take Me Home" />
+
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=5.3" />
+  <link rel="stylesheet" href="css/styles.css?v=5.5" />
 </head>
 <body>
   <div class="app-container">
@@ -86,6 +93,14 @@
       <button id="btn-calculate" class="btn-primary">
         <span>⚡ Save Settings & Recalculate</span>
       </button>
+
+      <!-- INSTALL / SHORTCUT BUTTON -->
+      <button id="btn-install-shortcut" class="btn-install-shortcut" type="button">
+        <span>📲 Install and create shortcut</span>
+      </button>
+      <div id="install-hint" class="install-hint">
+        Saves destination & settings. Uses live GPS when launched.
+      </div>
     </section>
 
     <!-- NON-INTRUSIVE FLOATING PROGRESS BANNER (Leaves map 100% visible) -->
@@ -140,6 +155,29 @@
           <a id="tapped-link-sbb-web" class="card-link-btn sbb" href="#" target="_blank" rel="noopener">
             <span>🚆 SBB Web</span>
           </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- INSTALLATION & SHORTCUT INSTRUCTIONS MODAL -->
+    <div id="install-modal" class="install-modal" style="display: none;" role="dialog" aria-labelledby="install-modal-title" aria-modal="true">
+      <div class="install-modal-backdrop" id="install-modal-backdrop"></div>
+      <div class="install-modal-card">
+        <div class="install-modal-header">
+          <div class="install-modal-title-row">
+            <img src="icons/icon.svg" width="36" height="36" alt="App Icon" class="install-modal-icon" />
+            <div class="install-modal-titles">
+              <h3 id="install-modal-title" class="install-modal-title">Install & Create Shortcut</h3>
+              <span class="install-modal-subtitle">Fast 1-tap navigation home</span>
+            </div>
+          </div>
+          <button id="btn-close-install-modal" class="install-modal-close" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="install-modal-body" id="install-modal-body">
+          <!-- Dynamic instructions based on platform -->
+        </div>
+        <div class="install-modal-footer">
+          <button id="btn-install-modal-done" class="btn-primary">Got it</button>
         </div>
       </div>
     </div>
