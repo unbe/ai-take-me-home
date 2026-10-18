@@ -46,6 +46,7 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -422,28 +423,37 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
 .fab-gps-container {
   position: absolute;
   left: 14px;
+  left: calc(14px + env(safe-area-inset-left, 0px));
   bottom: 24px;
-  bottom: max(24px, env(safe-area-inset-bottom));
-  z-index: 10;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  z-index: 1100;
   display: flex;
   flex-direction: column;
+  pointer-events: auto;
 }
 
 .fab-btn {
   background: rgba(15, 23, 42, 0.9);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border-subtle);
   color: var(--text-primary);
   width: 48px;
   height: 48px;
-  border-radius: 24px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
+  padding: 0;
+  margin: 0;
   box-shadow: var(--shadow-lg);
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease;
+  overflow: visible;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .fab-btn:active {
@@ -451,8 +461,13 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
 }
 
 .fab-btn .locate-icon {
+  width: 24px;
+  height: 24px;
   color: #38bdf8;
   display: block;
+  flex-shrink: 0;
+  margin: auto;
+  overflow: visible;
   transition: transform 0.2s ease, color 0.15s ease;
 }
 
@@ -473,6 +488,27 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   vertical-align: middle;
   line-height: 1;
   margin: 0 2px;
+  overflow: visible;
+}
+
+.locate-icon-inline svg {
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.75) !important;
+  color: #64748b !important;
+  font-size: 9px !important;
+  max-width: calc(100vw - 90px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leaflet-control-attribution a {
+  color: #94a3b8 !important;
 }
 
 /* ================= LEAFLET CUSTOM MARKERS ================= */

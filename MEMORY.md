@@ -200,3 +200,22 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
     1. New `sw.js` executes `self.skipWaiting()` in `install`, bypassing waiting state.
     2. In `activate`, obsolete version caches are deleted and `self.clients.claim()` assumes control immediately.
     3. Client listens for `navigator.serviceWorker.oncontrollerchange` and reloads (`window.location.reload()`) to immediately render updated HTML/JS assets.
+
+### N. Mobile PWA GPS Icon & Viewport Safe-Area Layout
+- **The Issue**: On mobile PWA / Safari, the floating GPS ("Locate me") button appeared half cut off or clipped at the bottom of the screen.
+- **Root Causes & Solutions**:
+  1. **Safe-Area Math (`env(safe-area-inset-bottom)`)**:
+     - `.fab-gps-container` previously used `bottom: max(24px, env(safe-area-inset-bottom))`.
+     - On iPhone PWAs with a 34px bottom home indicator, `max(24px, 34px)` evaluated to only 34px above the physical bottom glass. With a 48px button, the lower half overlapped the home indicator and bottom screen edge.
+     - Fixed by using additive insets: `bottom: calc(24px + env(safe-area-inset-bottom, 0px))` and `left: calc(14px + env(safe-area-inset-left, 0px))`, positioning the button safely above the home indicator.
+     - Added `height: 100dvh` on `.app-container` to maintain accurate viewport height during mobile dynamic address bar shifts.
+  2. **Z-Index Layering vs. Leaflet Controls**:
+     - `.fab-gps-container` originally had `z-index: 10`, while Leaflet attribution and map controls have `z-index: 1000`.
+     - On narrow mobile viewports (<400px), Leaflet's bottom-right attribution bar wrapped across the screen width and occluded the left-side button.
+     - Raised container to `z-index: 1100` and constrained attribution width via `max-width: calc(100vw - 90px)` with ellipsis truncation.
+  3. **Mobile WebKit Button UA Reset**:
+     - iOS WebKit `<button>` styling applies native padding and vertical alignment that can slice or displace child SVGs.
+     - Added `appearance: none; -webkit-appearance: none; padding: 0; margin: 0; min-width: 48px; min-height: 48px; border-radius: 50%; overflow: visible;` to `.fab-btn`.
+     - Configured SVG `.locate-icon` and `.locate-icon-inline` with `overflow: visible; flex-shrink: 0; margin: auto;` to eliminate line-box and flex clipping.
+  4. **Icon Standardization**:
+     - Standardized on the 4-tick target crosshair SVG icon (`<circle cx="12" cy="12" r="7">`, inner `<circle cx="12" cy="12" r="2.5">`, and 4 axis lines) across both `#btn-gps` and the welcome onboarding modal (`.locate-icon-inline`).
