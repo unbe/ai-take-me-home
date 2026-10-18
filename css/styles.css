@@ -20,19 +20,6 @@
 
   --border-subtle: rgba(255, 255, 255, 0.1);
   --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-
-  /* Safe bottom inset (0px in browser, min 48px in standalone PWA to clear system nav bar) */
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-@media (display-mode: standalone) {
-  :root {
-    --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
-  }
-}
-
-html.is-standalone {
-  --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
 }
 
 * {
@@ -42,30 +29,27 @@ html.is-standalone {
   -webkit-tap-highlight-color: transparent;
 }
 
-html {
+html, body {
   width: 100%;
   height: 100%;
-  height: 100dvh;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  height: 100%;
-  height: 100dvh;
-  width: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* ================= APP LAYOUT ================= */
 .app-container {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
   height: 100%;
-  height: 100dvh;
+  height: var(--app-height, 100%);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -85,7 +69,6 @@ body {
 .top-nav {
   position: absolute;
   top: 12px;
-  top: max(12px, env(safe-area-inset-top));
   left: 12px;
   right: 58px;
   max-width: 400px;
@@ -442,13 +425,11 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
 .fab-gps-container {
   position: absolute;
   left: 14px;
-  left: calc(14px + env(safe-area-inset-left, 0px));
-  bottom: calc(12px + var(--safe-bottom));
+  bottom: 24px;
   z-index: 1100;
   display: flex;
   flex-direction: column;
   pointer-events: auto;
-  transition: bottom 0.2s ease;
 }
 
 .fab-btn {
@@ -514,11 +495,6 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
   display: block;
   flex-shrink: 0;
   overflow: visible;
-}
-
-.leaflet-bottom {
-  bottom: var(--safe-bottom) !important;
-  transition: bottom 0.2s ease;
 }
 
 .leaflet-control-attribution {
@@ -945,7 +921,7 @@ input:not([type="radio"]):not([type="checkbox"]):focus, select:focus {
 /* FLOATING DETAILS BOX FOR TAPPED STOP */
 .tapped-stop-card {
   position: absolute;
-  bottom: calc(12px + var(--safe-bottom));
+  bottom: 24px;
   left: 14px;
   right: 14px;
   background: rgba(15, 23, 42, 0.96);

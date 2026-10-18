@@ -8,7 +8,7 @@ import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
 import { Storage } from './storage.js?v=3.1';
-import { APP_VERSION } from './version.js?v=1.8';
+import { APP_VERSION } from './version.js?v=1.9';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
@@ -1157,9 +1157,15 @@ function initEvents() {
 async function init() {
   console.log('[Take Me Home] Initializing application...');
 
-  // Mark document as standalone PWA if running installed
-  if (Storage.isStandalone()) {
-    document.documentElement.classList.add('is-standalone');
+  // Synchronize exact visible viewport height to prevent standalone PWA bottom overflow
+  const syncAppHeight = () => {
+    const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${h}px`);
+  };
+  syncAppHeight();
+  window.addEventListener('resize', syncAppHeight);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncAppHeight);
   }
 
   // 1. Load persistent config from localStorage (saved destination & settings, NO pilot coordinates)

@@ -201,40 +201,27 @@ $$\text{Total Trip Time} = t_{\text{reach}} + \text{Wait At Stop} + \text{Transi
     2. In `activate`, obsolete version caches are deleted and `self.clients.claim()` assumes control immediately.
     3. Client listens for `navigator.serviceWorker.oncontrollerchange` and reloads (`window.location.reload()`) to immediately render updated HTML/JS assets.
 
-### N. Mobile PWA GPS Icon & Viewport Safe-Area Layout
-- **The Issue**: On mobile PWA / Safari, the floating GPS ("Locate me") button and Leaflet footer appeared cut off or hidden behind the system navigation bar, while simultaneously appearing normal in mobile Chrome.
-- **Root Causes & Solutions**:
-  1. **The PWA Edge-to-Edge Navigation Bar Trap**:
-     - In **mobile Chrome (browser tab)**, the browser window terminates *above* the Android system navigation bar / gesture area. Thus `bottom: 0` sits cleanly above the system bar.
-     - In **standalone PWA mode (WebAPK)**, Android draws the webview edge-to-edge *behind* the ~48px system navigation bar. Crucially, Android WebAPKs frequently fail to report navigation bar heights to `env(safe-area-inset-bottom)`, leaving it evaluating to `0px`.
-     - When elements were placed at `bottom: 0` (Leaflet attribution) and `bottom: 12px` (GPS button), the 48px system navigation bar completely concealed the Leaflet footer, leaving only ~1mm of the 48px GPS button peeking out above the bar.
-  2. **Dual-Context `--safe-bottom` Architecture**:
-     - Defined a dynamic CSS custom property `--safe-bottom`:
-       ```css
-       :root {
-         --safe-bottom: env(safe-area-inset-bottom, 0px);
-       }
-       @media (display-mode: standalone) {
-         :root {
-           --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
-         }
-       }
-       html.is-standalone {
-         --safe-bottom: max(48px, env(safe-area-inset-bottom, 48px));
-       }
-       ```
-     - In mobile Chrome / desktop, `--safe-bottom` is `0px`, preserving the natural, compact layout without unnecessary empty gaps.
-     - In standalone PWA, `--safe-bottom` enforces at least `48px` clearance (or hardware safe area, whichever is larger), cleanly lifting all bottom UI above the Android system navigation bar.
-  3. **Leaflet Footer & Floating Elements Integration**:
-     - `.leaflet-bottom`: Set to `bottom: var(--safe-bottom) !important;` so Leaflet's attribution bar floats above the navigation bar in PWAs.
-     - `.fab-gps-container` & `.tapped-stop-card`: Set to `bottom: calc(12px + var(--safe-bottom));`, ensuring a neat, consistent 12px margin above the navigation bar in standalone PWAs and 12px above bottom in browser tabs.
-  4. **The PWA Stale Cache Divergence**:
-     - When updates are deployed, mobile browser tabs fetch new HTML/CSS bundles immediately over the network.
-     - In contrast, standalone installed PWAs (WebAPK on Android or standalone WebApp on iOS) often keep the previous version's Service Worker and stylesheet running in memory until the application process is completely closed and restarted.
-     - Tied `<link rel="stylesheet" href="css/styles.css?v=...">` directly to `APP_VERSION` so WebViews never reuse stale cached CSS.
-  5. **Mobile WebKit Button UA Reset & Icon Standardization**:
-     - Added `appearance: none; -webkit-appearance: none; padding: 0; margin: 0; min-width: 48px; min-height: 48px; border-radius: 50%; overflow: visible;` to `.fab-btn`.
+### N. Mobile PWA Viewport Containment & Natural Layout
+- **The Systematic Issue**:
+  - `viewport-fit=cover` and `black-translucent` status bar styles explicitly instruct mobile OS webviews to render edge-to-edge *behind* system cutouts and system navigation bars.
+  - In Android standalone PWA (WebAPK) mode, this causes the webview to extend behind the 48px system navigation bar while failing to report insets to `env(safe-area-inset-bottom)`.
+  - Concurrently, CSS dynamic viewport units (`100dvh`) suffer from cold-boot calculation bugs in Android Chrome standalone mode, causing ~50px overflow.
+  - Attempting to counter this with artificial pixel offsets, media query overrides, or `--safe-bottom` hacks created an irreconcilable conflict where elements floated high in browser tabs while remaining clipped in PWAs.
+- **The Systematic Architecture**:
+  1. **Contained Safe Viewport (`index.html`)**:
+     - Removed `viewport-fit=cover` and set `<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />`.
+     - Set `<meta name="apple-mobile-web-app-status-bar-style" content="default" />`.
+     - This instructs the operating system to fit the webview strictly within the safe, visible screen boundaries (above the system navigation bar and below notches), eliminating edge-to-edge overflow at the root.
+  2. **Fixed Viewport Shell (`css/styles.css`)**:
+     - Stripped all `100dvh`, `--safe-bottom`, and custom Leaflet bottom hacks.
+     - Anchored `.app-container` via `position: fixed; inset: 0; width: 100%; height: 100%; height: var(--app-height, 100%); overflow: hidden;`.
+     - Permitted Leaflet's `.leaflet-bottom` attribution to render naturally at its native `bottom: 0`.
+     - Set clean, standard `bottom: 24px` on `.fab-gps-container` and `.tapped-stop-card`.
+  3. **Visual Viewport Synchronization (`js/app.js`)**:
+     - Added `syncAppHeight()` binding `window.visualViewport.height || window.innerHeight` to `--app-height`, ensuring the container strictly tracks the exact visible pixel rectangle across all devices and orientation changes.
+  4. **Icon Standardization & Button UA Reset**:
      - Standardized on the 4-tick target crosshair SVG icon (`<circle cx="12" cy="12" r="7">`, inner `<circle cx="12" cy="12" r="2.5">`, and 4 axis lines) across both `#btn-gps` and the welcome onboarding modal (`.locate-icon-inline`).
+     - Added `-webkit-appearance: none; appearance: none; padding: 0; margin: 0; min-width: 48px; min-height: 48px; border-radius: 50%; overflow: visible;` to `.fab-btn`.
 
 ### O. Map Base Layers & Decommissioning of OpenTopoMap
 - **Supported Base Layers**:

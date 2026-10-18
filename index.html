@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Take Me Home - Paragliding & Transit Navigator</title>
   <meta name="description" content="Find nearest public transport stops, calculate glide ratio L/D and transit times to your destination." />
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -22,7 +22,7 @@
   <meta name="application-name" content="Take Me Home" />
 
   <!-- App Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=1.8" />
+  <link rel="stylesheet" href="css/styles.css?v=1.9" />
 </head>
 <body>
   <div class="app-container">
@@ -129,7 +129,7 @@
         <div class="settings-version-row">
           <span class="settings-version-label">Take Me Home</span>
           <button id="btn-version" class="settings-version-badge" type="button" title="Check for updates">
-            <span id="app-version-text">v1.8</span>
+            <span id="app-version-text">v1.9</span>
             <span class="version-update-icon" aria-hidden="true">↻</span>
           </button>
         </div>
@@ -224,7 +224,7 @@
             <img src="icons/icon.svg" width="38" height="38" alt="Take Me Home Icon" class="install-modal-icon" />
             <div class="install-modal-titles">
               <h3 id="intro-modal-title" class="install-modal-title">Welcome to Take Me Home!</h3>
-              <span class="install-modal-subtitle">Paragliding Transit Navigator &bull; <span id="intro-version-text">v1.8</span></span>
+              <span class="install-modal-subtitle">Paragliding Transit Navigator &bull; <span id="intro-version-text">v1.9</span></span>
             </div>
           </div>
           <button id="btn-close-intro-modal" class="install-modal-close" aria-label="Close dialog">&times;</button>
@@ -283,6 +283,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js"></script>
 
   <!-- App Entry Point (ES Module) -->
-  <script type="module" src="js/app.js?v=1.8"></script>
+  <script type="module" src="js/app.js?v=1.9"></script>
 </body>
 </html>
