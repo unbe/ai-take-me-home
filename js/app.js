@@ -159,6 +159,7 @@ function updateUrlFromState() {
 function parseStateFromUrl() {
   const params = new URLSearchParams(window.location.search || window.location.hash.replace(/^#\??/, ''));
   let pilotSetInUrl = false;
+  let altSetInUrl = false;
 
   // Pilot position & altitude
   const lat = params.get('lat') || params.get('pilotLat');
@@ -179,6 +180,7 @@ function parseStateFromUrl() {
     const parsedAlt = parseFloat(alt);
     if (!isNaN(parsedAlt)) {
       State.pilot.altM = Math.round(parsedAlt);
+      altSetInUrl = true;
       pilotSetInUrl = true;
     }
   }
