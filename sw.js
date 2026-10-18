@@ -5,7 +5,7 @@
  * NOTE: When bumping version in js/version.js, also bump APP_VERSION here!
  */
 
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.3';
 const CACHE_NAME = `takemehome-v${APP_VERSION}`;
 
 const PRECACHE_ASSETS = [

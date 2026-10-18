@@ -8,7 +8,7 @@ import { Elevation } from './elevation.js?v=3.1';
 import { Transit } from './transit.js?v=3.1';
 import { MapManager } from './map.js?v=3.1';
 import { Storage } from './storage.js?v=3.1';
-import { APP_VERSION } from './version.js?v=1.2';
+import { APP_VERSION } from './version.js?v=1.3';
 import { escapeHtml } from './util.js?v=3.1';
 
 // Application State
@@ -899,7 +899,7 @@ function openInstallModal() {
         </div>
       </div>
       <div class="install-note">
-        <strong>💡 Live GPS:</strong> When launched from your Home Screen, the app will instantly acquire your live GPS position and altitude to route you to your saved destination.
+        <strong>💡 Live GPS:</strong> When launched from your Home Screen, the app will automatically acquire your live GPS position and altitude to route you to your saved destination.
       </div>
     `;
   } else {
@@ -919,7 +919,7 @@ function openInstallModal() {
         </div>
       </div>
       <div class="install-note">
-        <strong>💡 Live GPS:</strong> When launched from your Home Screen, the app will instantly acquire your live GPS position and altitude to route you to your saved destination.
+        <strong>💡 Live GPS:</strong> When launched from your Home Screen, the app will automatically acquire your live GPS position and altitude to route you to your saved destination.
       </div>
     `;
   }
